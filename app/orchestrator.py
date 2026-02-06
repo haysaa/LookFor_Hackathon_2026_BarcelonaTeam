@@ -10,7 +10,6 @@ from app.models import (
 )
 from app.store import session_store
 from app.trace import TraceLogger
-from app.workflow import workflow_engine
 
 
 class Orchestrator:
@@ -339,7 +338,7 @@ class Orchestrator:
 
 # Global orchestrator instance with agents wired in
 orchestrator = Orchestrator()
-orchestrator.set_workflow_engine(workflow_engine)
+# Workflow engine will be wired when available
 
 # Import and wire other agents (lazy import to avoid circular deps)
 def wire_agents():
