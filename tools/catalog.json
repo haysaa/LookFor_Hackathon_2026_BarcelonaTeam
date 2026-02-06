@@ -1,0 +1,567 @@
+{
+    "version": "2.0",
+    "description": "Official Hackathon Tool Catalog - Shopify + Skio APIs",
+    "shopify_get_order_details": {
+        "handle": "shopify_get_order_details",
+        "endpoint": null,
+        "description": "Get detailed order information by order ID",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "order_id": {
+                    "type": "string",
+                    "description": "Shopify order ID"
+                }
+            },
+            "required": [
+                "order_id"
+            ]
+        },
+        "mock_response": {
+            "success": true,
+            "data": {
+                "order_id": "ORD-12345",
+                "status": "in_transit",
+                "created_at": "2026-02-01T10:00:00Z",
+                "shipping_status": "shipped",
+                "estimated_delivery": "2026-02-07",
+                "items": [
+                    {
+                        "name": "Blue T-Shirt",
+                        "quantity": 1,
+                        "price": 299.00
+                    }
+                ],
+                "total": 299.00
+            }
+        }
+    },
+    "shopify_get_customer_orders": {
+        "handle": "shopify_get_customer_orders",
+        "endpoint": null,
+        "description": "Get all orders for a customer",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "customer_id": {
+                    "type": "string",
+                    "description": "Shopify customer ID"
+                }
+            },
+            "required": [
+                "customer_id"
+            ]
+        },
+        "mock_response": {
+            "success": true,
+            "data": {
+                "orders": [
+                    {
+                        "order_id": "ORD-12345",
+                        "status": "in_transit",
+                        "total": 299.00
+                    },
+                    {
+                        "order_id": "ORD-12344",
+                        "status": "delivered",
+                        "total": 450.00
+                    }
+                ]
+            }
+        }
+    },
+    "shopify_refund_order": {
+        "handle": "shopify_refund_order",
+        "endpoint": null,
+        "description": "Process refund for an order",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "order_id": {
+                    "type": "string"
+                },
+                "amount": {
+                    "type": "number",
+                    "description": "Refund amount (optional, full refund if omitted)"
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Reason for refund"
+                }
+            },
+            "required": [
+                "order_id"
+            ]
+        },
+        "mock_response": {
+            "success": true,
+            "data": {
+                "refund_id": "REF-98765",
+                "amount": 299.00,
+                "status": "processed"
+            }
+        }
+    },
+    "shopify_create_store_credit": {
+        "handle": "shopify_create_store_credit",
+        "endpoint": null,
+        "description": "Issue store credit to customer",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "customer_id": {
+                    "type": "string"
+                },
+                "amount": {
+                    "type": "number"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "customer_id",
+                "amount"
+            ]
+        },
+        "mock_response": {
+            "success": true,
+            "data": {
+                "credit_id": "SC-11111",
+                "amount": 110.00,
+                "total_credit": 110.00,
+                "note": "10% bonus applied"
+            }
+        }
+    },
+    "shopify_create_return": {
+        "handle": "shopify_create_return",
+        "endpoint": null,
+        "description": "Create a return request for order items",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "order_id": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Item IDs to return"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "order_id",
+                "items"
+            ]
+        },
+        "mock_response": {
+            "success": false,
+            "error": "Return requires manual approval",
+            "should_escalate": true
+        }
+    },
+    "shopify_cancel_order": {
+        "handle": "shopify_cancel_order",
+        "endpoint": null,
+        "description": "Cancel an order",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "order_id": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "order_id"
+            ]
+        },
+        "mock_response": {
+            "success": false,
+            "error": "Order cancellation requires manager approval",
+            "should_escalate": true
+        }
+    },
+    "shopify_add_tags": {
+        "handle": "shopify_add_tags",
+        "endpoint": null,
+        "description": "Add tags to order or customer",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "resource_type": {
+                    "type": "string",
+                    "enum": [
+                        "order",
+                        "customer"
+                    ]
+                },
+                "resource_id": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            },
+            "required": [
+                "resource_type",
+                "resource_id",
+                "tags"
+            ]
+        },
+        "mock_response": {
+            "success": true,
+            "data": {
+                "tags_added": [
+                    "escalated",
+                    "wismo"
+                ]
+            }
+        }
+    },
+    "shopify_create_discount_code": {
+        "handle": "shopify_create_discount_code",
+        "endpoint": null,
+        "description": "Create a discount code for customer",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "customer_id": {
+                    "type": "string"
+                },
+                "discount_percent": {
+                    "type": "number"
+                },
+                "valid_days": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "customer_id",
+                "discount_percent"
+            ]
+        },
+        "mock_response": {
+            "success": true,
+            "data": {
+                "code": "SORRY10-ABC123",
+                "discount": 10,
+                "expires_at": "2026-02-16T23:59:59Z"
+            }
+        }
+    },
+    "shopify_update_order_shipping_address": {
+        "handle": "shopify_update_order_shipping_address",
+        "endpoint": null,
+        "description": "Update shipping address for an order",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "order_id": {
+                    "type": "string"
+                },
+                "address": {
+                    "type": "object",
+                    "properties": {
+                        "street": {
+                            "type": "string"
+                        },
+                        "city": {
+                            "type": "string"
+                        },
+                        "postal_code": {
+                            "type": "string"
+                        },
+                        "country": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "required": [
+                "order_id",
+                "address"
+            ]
+        },
+        "mock_response": {
+            "success": false,
+            "error": "Order already shipped, address cannot be changed",
+            "should_escalate": true
+        }
+    },
+    "shopify_get_product_details": {
+        "handle": "shopify_get_product_details",
+        "endpoint": null,
+        "description": "Get product details by product ID",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "product_id": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "product_id"
+            ]
+        },
+        "mock_response": {
+            "success": true,
+            "data": {
+                "product_id": "PRD-001",
+                "name": "Blue T-Shirt",
+                "price": 299.00,
+                "in_stock": true
+            }
+        }
+    },
+    "shopify_get_product_recommendations": {
+        "handle": "shopify_get_product_recommendations",
+        "endpoint": null,
+        "description": "Get product recommendations",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "product_id": {
+                    "type": "string"
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 5
+                }
+            },
+            "required": [
+                "product_id"
+            ]
+        },
+        "mock_response": {
+            "success": true,
+            "data": {
+                "recommendations": [
+                    {
+                        "product_id": "PRD-002",
+                        "name": "Red T-Shirt"
+                    },
+                    {
+                        "product_id": "PRD-003",
+                        "name": "Blue Jeans"
+                    }
+                ]
+            }
+        }
+    },
+    "shopify_get_collection_recommendations": {
+        "handle": "shopify_get_collection_recommendations",
+        "endpoint": null,
+        "description": "Get collection recommendations",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "collection_id": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "collection_id"
+            ]
+        },
+        "mock_response": {
+            "success": true,
+            "data": {
+                "collections": []
+            }
+        }
+    },
+    "shopify_get_related_knowledge_source": {
+        "handle": "shopify_get_related_knowledge_source",
+        "endpoint": null,
+        "description": "Search knowledge base for related articles",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "query"
+            ]
+        },
+        "mock_response": {
+            "success": true,
+            "data": {
+                "articles": [
+                    {
+                        "title": "Shipping Policy",
+                        "url": "/help/shipping"
+                    },
+                    {
+                        "title": "Return Policy",
+                        "url": "/help/returns"
+                    }
+                ]
+            }
+        }
+    },
+    "shopify_create_draft_order": {
+        "handle": "shopify_create_draft_order",
+        "endpoint": null,
+        "description": "Create a draft order (for reship)",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "customer_id": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
+                },
+                "shipping_address": {
+                    "type": "object"
+                }
+            },
+            "required": [
+                "customer_id",
+                "items"
+            ]
+        },
+        "mock_response": {
+            "success": false,
+            "error": "Draft order for reship requires manual approval",
+            "should_escalate": true
+        }
+    },
+    "skio_get_subscription_status": {
+        "handle": "skio_get_subscription_status",
+        "endpoint": null,
+        "description": "Get subscription status",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "subscription_id": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "subscription_id"
+            ]
+        },
+        "mock_response": {
+            "success": true,
+            "data": {
+                "subscription_id": "SUB-001",
+                "status": "active",
+                "next_order_date": "2026-02-15"
+            }
+        }
+    },
+    "skio_cancel_subscription": {
+        "handle": "skio_cancel_subscription",
+        "endpoint": null,
+        "description": "Cancel a subscription",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "subscription_id": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "subscription_id"
+            ]
+        },
+        "mock_response": {
+            "success": false,
+            "error": "Subscription cancellation requires confirmation",
+            "should_escalate": true
+        }
+    },
+    "skio_pause_subscription": {
+        "handle": "skio_pause_subscription",
+        "endpoint": null,
+        "description": "Pause a subscription",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "subscription_id": {
+                    "type": "string"
+                },
+                "pause_until": {
+                    "type": "string",
+                    "format": "date"
+                }
+            },
+            "required": [
+                "subscription_id"
+            ]
+        },
+        "mock_response": {
+            "success": true,
+            "data": {
+                "status": "paused",
+                "resume_date": "2026-03-01"
+            }
+        }
+    },
+    "skio_unpause_subscription": {
+        "handle": "skio_unpause_subscription",
+        "endpoint": null,
+        "description": "Resume a paused subscription",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "subscription_id": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "subscription_id"
+            ]
+        },
+        "mock_response": {
+            "success": true,
+            "data": {
+                "status": "active"
+            }
+        }
+    },
+    "skio_skip_next_order_subscription": {
+        "handle": "skio_skip_next_order_subscription",
+        "endpoint": null,
+        "description": "Skip the next subscription order",
+        "paramsJsonSchema": {
+            "type": "object",
+            "properties": {
+                "subscription_id": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "subscription_id"
+            ]
+        },
+        "mock_response": {
+            "success": true,
+            "data": {
+                "skipped_date": "2026-02-15",
+                "next_order_date": "2026-03-15"
+            }
+        }
+    }
+}

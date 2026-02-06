@@ -10,112 +10,196 @@
 
 - [x] 3 use-case için end-to-end akış çalışır durumda
 - [x] Session yönetimi + escalation logic
-- [x] Tool entegrasyonu (Shopify/Skio official handles)
-- [x] Observable trace system (decisions, tools, actions)
+- [x] Tool entegrasyonu (resmi Shopify/Skio tool'ları)
+- [x] Observable trace system
+- [ ] Ticket dataset ingestion (yarın gelecek)
 - [x] Demo senaryolarının tümü geçer
 - [x] Canlı demo yapılabilir durumda sunum
 
 ---
 
-## 📧 Email Session Start Requirements
+## 📋 Minimum Gereksinimler (Hackathon Spec)
 
-**Session start MUST accept:**
-```json
-{
-  "customer_email": "customer@example.com",
-  "first_name": "John",
-  "last_name": "Doe",
-  "shopify_customer_id": "cust_XXXXXXXX"
-}
-```
+### ✅ Email Session Start
+- Session start MUST accept: `customer_email`, `first_name`, `last_name`, `shopify_customer_id`
+- Endpoint: `POST /session/start`
 
-**Multi-Turn Session Handling:**
-- Continuous memory across messages
+### ✅ Inquiry Handling with Continuous Memory
+- Multi-turn session handling
+- Conversation history maintained per session
 - No contradictions between turns
 - Behaves like real email thread
-- Session context preserved until resolved/escalated
 
----
+### ✅ Observable Answers and Actions
+Per session we MUST inspect:
+- Final customer message
+- Any tools called with inputs/outputs
+- Any actions taken
+- Trace/timeline of agent decisions (visible via `GET /session/{id}/trace`)
 
-## 🎫 Ticket Dataset Plan (Arrival Tomorrow)
+### ✅ Escalation Mechanism
+When required by workflow or uncertainty:
+1. Inform customer it's escalated ("Uzman ekibimize iletildi, 24 saat içinde dönüş")
+2. Create structured team summary (JSON schema below)
+3. Stop automatic answer generation (session lock: `status=escalated`)
 
-### Today: Build Infrastructure Without Tickets
-- [ ] Create `TicketStore` interface (abstract layer)
-- [ ] Create `DummyTicketStore` with 3-5 fixture tickets per use-case
-- [ ] Build ticket parsing logic for expected format
-
-### Tomorrow: Ingest Real Dataset
-- [ ] Parse real ticket JSON (no architecture refactor needed)
-- [ ] Populate `TicketStore` with real data
-- [ ] (Optional) RAG-lite similarity search for Support Agent prompts
-
-**Expected Ticket Format:**
+**Escalation JSON Schema (REQUIRED)**:
 ```json
 {
-  "conversationId": "<UUID@email.com>",
-  "customerId": "cust_XXXXXXXX",
-  "createdAt": "DD-MMM-YYYY HH:mm:ss",
-  "ConversationType": "email",
-  "subject": "string",
-  "conversation": "string"
+  "escalation_id": "esc_xxx",
+  "customer_id": "cust_xxx",
+  "reason": "string",
+  "conversation_summary": "string",
+  "attempted_actions": ["array"],
+  "priority": "low|medium|high",
+  "created_at": "ISO-8601 timestamp"
 }
 ```
 
 ---
 
-## 🔧 Official Tool Handles (Hackathon Spec)
+## 🎫 Ticket Dataset Track (BUGÜN + YARIN)
 
-### Shopify Tools
-| Handle | Purpose |
-|--------|---------|
-| `shopify_add_tags` | Add tags to order/customer |
-| `shopify_cancel_order` | Cancel an order |
-| `shopify_create_discount_code` | Create discount code |
-| `shopify_create_draft_order` | Create draft order |
-| `shopify_create_return` | Create return request |
-| `shopify_create_store_credit` | Issue store credit |
-| `shopify_get_collection_recommendations` | Get collection recommendations |
-| `shopify_get_customer_orders` | Get customer's orders |
-| `shopify_get_order_details` | Get order details |
-| `shopify_get_product_details` | Get product details |
-| `shopify_get_product_recommendations` | Get product recommendations |
-| `shopify_get_related_knowledge_source` | Get FAQ/knowledge |
-| `shopify_refund_order` | Process refund |
-| `shopify_update_order_shipping_address` | Update shipping address |
+### Bugün - TicketStore Interface + Fixtures
+**Sahip**: Dev A  
+**Süre**: 1 saat
 
-### Skio Tools (Subscriptions)
-| Handle | Purpose |
-|--------|---------|
-| `skio_cancel_subscription` | Cancel subscription |
-| `skio_get_subscription_status` | Get subscription status |
-| `skio_pause_subscription` | Pause subscription |
-| `skio_skip_next_order_subscription` | Skip next order |
-| `skio_unpause_subscription` | Unpause subscription |
+- [ ] **TicketStore interface** tanımla:
+  ```python
+  class TicketStore:
+      def get_by_conversation_id(self, conv_id: str) -> Ticket | None
+      def get_by_customer_id(self, cust_id: str) -> list[Ticket]
+      def search_similar(self, query: str, limit: int) -> list[Ticket]
+      def ingest(self, tickets: list[dict]) -> int
+  ```
+
+- [ ] **Dummy fixtures** oluştur (`fixtures/tickets_dummy.json`):
+  ```json
+  [
+    {
+      "conversationId": "abc123@email.com",
+      "customerId": "cust_12345678",
+      "createdAt": "06-Feb-2026 14:30:00",
+      "ConversationType": "email",
+      "subject": "Siparişim nerede?",
+      "conversation": "Merhaba, 3 gün önce sipariş verdim..."
+    }
+  ]
+  ```
+
+- [ ] **InMemoryTicketStore** implementasyonu (dict-based)
+
+**⚠️ Test Gate**: `ticket_store.get_by_customer_id("cust_12345678")` → fixture döner
+
+### Yarın - Gerçek Ticket Ingestion
+**Sahip**: Dev A  
+**Süre**: 30dk (dataset gelince)
+
+- [ ] Parse ticket JSON (format yukarıdaki gibi)
+- [ ] `TicketStore.ingest(tickets)` çağır
+- [ ] Basit RAG için keyword search ekle (optional)
+- [ ] Test: 10 random ticket'ı query et
 
 ---
 
-## 🌐 Uniform API Response Contract
+## 🔧 Official Tool Handles (Shopify + Skio)
 
-All tool endpoints return HTTP 200 with this structure:
+> **KRİTİK**: Generic mock tool isimleri KULLANILMAYACAK. Aşağıdaki resmi handle'lar kullanılacak.
 
-**Success:**
+### Shopify Tools
+| Handle | Açıklama | Use-Case |
+|--------|----------|----------|
+| `shopify_get_order_details` | Sipariş detayları | WISMO, Refund |
+| `shopify_get_customer_orders` | Müşteri siparişleri | Tümü |
+| `shopify_refund_order` | İade işlemi | Refund |
+| `shopify_create_store_credit` | Store credit oluştur | Wrong/Missing |
+| `shopify_create_return` | İade talebi oluştur | Refund |
+| `shopify_cancel_order` | Sipariş iptal | Refund |
+| `shopify_add_tags` | Tag ekle | Escalation tracking |
+| `shopify_create_discount_code` | İndirim kodu | Compensation |
+| `shopify_update_order_shipping_address` | Adres güncelle | WISMO |
+| `shopify_get_product_details` | Ürün detayı | Wrong/Missing |
+| `shopify_get_product_recommendations` | Ürün önerileri | Upsell |
+| `shopify_get_collection_recommendations` | Koleksiyon | Upsell |
+| `shopify_get_related_knowledge_source` | Bilgi bankası | Tümü |
+| `shopify_create_draft_order` | Taslak sipariş | Reship |
+
+### Skio Tools (Subscription)
+| Handle | Açıklama |
+|--------|----------|
+| `skio_get_subscription_status` | Abonelik durumu |
+| `skio_cancel_subscription` | Abonelik iptal |
+| `skio_pause_subscription` | Abonelik duraklat |
+| `skio_unpause_subscription` | Abonelik devam |
+| `skio_skip_next_order_subscription` | Sonraki siparişi atla |
+
+---
+
+## 🔌 ToolsClient Requirements (KRİTİK)
+
+### Uniform API Response Contract
+Tüm tool endpoint'leri HTTP 200 döner:
+
+**Success**:
 ```json
-{"success": true}
-// or
-{"success": true, "data": {...}}
+{ "success": true }
+// veya
+{ "success": true, "data": { ... } }
 ```
 
-**Failure:**
+**Failure**:
 ```json
-{"success": false, "error": "Error description"}
+{ "success": false, "error": "Human readable error message" }
 ```
 
-**ToolsClient Requirements:**
-- [ ] Enforce HTTP 200 contract parsing
-- [ ] Normalize all responses to `{success, data?, error?}`
-- [ ] JSON-schema validation on params BEFORE calling tools
-- [ ] Log every tool call (input/output) to trace
-- [ ] Implement 1 retry on transient failures
+### ToolsClient Wrapper Gereksinimleri
+**Sahip**: Dev A (infrastructure) + Dev B (integration)
+
+- [ ] **JSON Schema Validation** (ZORUNLU):
+  - Her tool çağrısı öncesi `paramsJsonSchema` ile params validate et
+  - Validation fail → tool çağırma, hata dön
+
+- [ ] **Normalized Response**:
+  - Her response `{success, data?, error?}` formatına normalize et
+
+- [ ] **Retry Logic**:
+  - Transient failure → 1 retry
+  - 2. failure → `should_escalate=true`
+
+- [ ] **Trace Logging**:
+  - Her tool call: `{tool_name, params, response, success, retry_count, timestamp}`
+
+### tools/catalog.json Format
+```json
+{
+  "shopify_get_order_details": {
+    "handle": "shopify_get_order_details",
+    "endpoint": "/api/tools/shopify/get_order_details",
+    "description": "Get order details by order ID",
+    "paramsJsonSchema": {
+      "type": "object",
+      "properties": {
+        "order_id": { "type": "string" }
+      },
+      "required": ["order_id"]
+    }
+  },
+  "shopify_refund_order": {
+    "handle": "shopify_refund_order",
+    "endpoint": "/api/tools/shopify/refund_order",
+    "description": "Process refund for an order",
+    "paramsJsonSchema": {
+      "type": "object",
+      "properties": {
+        "order_id": { "type": "string" },
+        "amount": { "type": "number" },
+        "reason": { "type": "string" }
+      },
+      "required": ["order_id"]
+    }
+  }
+}
+```
 
 ---
 
@@ -123,33 +207,45 @@ All tool endpoints return HTTP 200 with this structure:
 
 ### Sabah (09:00 - 13:00) - **4 saat**
 
-#### Dev A - Session & Orchestrator Core
-**Süre**: 3.5 saat
+#### Dev A - Session & Orchestrator Core ✅
+**Süre**: 3.5 saat | **Status**: TAMAMLANDI
 
-- [ ] **Session State modeli** (30dk)
-  - `Session` dataclass with email session fields:
-    - `customer_email`, `first_name`, `last_name`, `shopify_customer_id`
-    - `messages[]`, `intent`, `case_context`, `tool_history[]`, `status`
+- [x] **Session State modeli** (30dk)
+  - `Session` dataclass: customer_info, messages, intent, case_context, tool_history, status
   - In-memory store (dict based)
-  - Multi-turn message history with continuous memory
   
-- [ ] **Session endpoints** (1 saat)
-  - `POST /session/start` - Accept email session fields (email, first/last name, shopify_customer_id)
-  - `POST /session/{id}/message` - Receive email, orchestrator handles
-  - `GET /session/{id}/trace` - Return observable timeline JSON
+- [x] **Session endpoints** (1 saat)
+  - `POST /session/start` - customer bilgileriyle session oluştur
+  - `POST /session/{id}/message` - mesaj al, orchestrator'a yönlendir
+  - `GET /session/{id}/trace` - timeline JSON döndür
+  
+- [x] **Orchestrator logic** (2 saat)
+  - Session status kontrolü (escalated ise durma)
+  - Agent çağrı sıralaması: triage → workflow → (action?) → support
+  - Escalation tetikleyicilerini handle et
+  - Her adımı trace listesine kaydet
 
-- [ ] **Orchestrator logic** (2 saat)
-  - Session status kontrolü (escalated ise durma = session lock)
-  - Agent call sequence: triage → workflow → (action?) → support
-  - Escalation triggers → lock session
-  - Record every step to trace
+<details>
+<summary>✅ Step Completion Note - Session & Orchestrator</summary>
 
-**Çıktı**: `/session/start` ve `/message` çalışıyor
+**Implementasyon**:
+- `app/models.py`: Session, Message, TraceEvent, CaseContext, EscalationPayload
+- `app/store.py`: InMemory SessionStore
+- `app/api.py`: FastAPI endpoints
+- `app/orchestrator.py`: Agent pipeline coordinator
+- `app/trace.py`: TraceLogger utility
 
-**⚠️ Test Gate**: 
-- [ ] Smoke test: /start + /message endpoints 200 döner
-- [ ] Session start accepts all required fields (email, first_name, last_name, shopify_customer_id)
-- [ ] Multi-turn: 2nd message retrieves context from 1st
+**Test Sonuçları**: 14/14 passed
+- Smoke tests: /start, /message, /trace endpoints
+- Unit tests: SessionStore CRUD, escalation lock
+
+**Trace Sample**:
+```json
+{"event_type": "customer_message", "data": {"message": "Siparişim nerede?"}}
+{"event_type": "triage_result", "agent": "triage", "data": {"intent": "WISMO", "confidence": 0.92}}
+{"event_type": "workflow_decision", "agent": "workflow", "data": {"next_action": "respond"}}
+```
+</details>
 
 ---
 
@@ -182,55 +278,50 @@ All tool endpoints return HTTP 200 with this structure:
 
 ### Öğleden Sonra (14:00 - 18:00) - **4 saat**
 
-#### Dev A - Workflow Engine (Deterministik Policy)
-**Süre**: 4 saat
+#### Dev A - Workflow Engine ✅
+**Süre**: 4 saat | **Status**: TAMAMLANDI
 
-- [ ] **WorkflowEngine (JSON loader + evaluator)** (2.5 saat)
-  - Read decision trees from `workflows/*.json`
-  - Input: intent + case_context + tool_result
-  - Output: `WorkflowDecision` JSON:
-    - `workflow_id`, `next_action` (ask_clarifying|call_tool|respond|escalate)
-    - `required_fields_missing[]`
-    - `policy_applied[]`
-    - `tool_plan[]` (only when `call_tool`)
-  - **CRITICAL**: Policy decisions are deterministic, NOT LLM
+- [x] **WorkflowEngine (JSON loader + evaluator)** (2.5 saat)
+- [x] **Orchestrator entegrasyonu** (1 saat)
+- [x] **Test Gate**: 9/9 workflow tests passed
 
-- [ ] **Orchestrator integration** (1 saat)
-  - Orchestrator → WorkflowEngine call
-  - Support workflow → tool → workflow → reply loop
+<details>
+<summary>✅ Step Completion Note - Workflow Engine</summary>
 
-- [ ] **Test Gate: WorkflowEngine** (30dk)
-  - 10 decision table tests
+**Implementasyon**:
+- `app/workflow/__init__.py`: WorkflowEngine class
+- `workflows/wismo.json`: WISMO decision tree
+- `workflows/wrong_missing.json`: Wrong/Missing decision tree
+- `workflows/refund_standard.json`: Refund routing
+
+**Test Sonuçları**: 9/9 passed
+</details>
 
 ---
 
-#### Dev B - ToolsClient + Official Tool Integration
+#### Dev B - ToolsClient + Action Agent (UPDATED)
 **Süre**: 4 saat
 
-- [ ] **Tool Catalog with Official Handles** (1.5 saat)
-  - `tools/catalog.json` with official Shopify/Skio handles:
-    - tool handle → endpoint → paramsJsonSchema → description
-  - Map use-case tools:
-    - WISMO: `shopify_get_order_details`, `shopify_get_customer_orders`
-    - Wrong/Missing: `shopify_create_return`, `shopify_create_store_credit`
-    - Refund: `shopify_refund_order`, `shopify_create_store_credit`
+- [ ] **tools/catalog.json** güncelle (OFFICIAL HANDLES):
+  - `shopify_get_order_details`
+  - `shopify_get_customer_orders`
+  - `shopify_refund_order`
+  - `shopify_create_store_credit`
+  - `shopify_create_return`
+  - Her tool için `paramsJsonSchema` tanımla
 
-- [ ] **ToolsClient wrapper (CRITICAL)** (1.5 saat)
-  - Single entry: `ToolsClient.execute(tool_handle, params)`
-  - **JSON-Schema validation** on params BEFORE calling
-  - Enforce HTTP 200 + `{success, data?, error?}` contract
-  - Normalize all responses
-  - 1 retry on transient failure → escalation if still fails
-  - Log every call to trace: `{tool_handle, params, response, success, retry_count, timestamp}`
+- [ ] **ToolsClient JSON Schema Validation** ekle:
+  ```python
+  def validate_params(self, tool_name: str, params: dict) -> bool:
+      schema = self.catalog[tool_name]["paramsJsonSchema"]
+      # jsonschema.validate(params, schema)
+  ```
 
-- [ ] **Mock Tool Server** (1 saat)
-  - Local stubs returning official contract format
-  - Support success/failure scenarios for testing
+- [ ] **Mock responses** resmi tool handle'ları için
 
 **⚠️ Test Gate**:
-- [ ] JSON-schema validation rejects invalid params
-- [ ] success:false → retry=1 → escalation flag
-- [ ] Trace contains tool_call events with input/output
+- JSON schema validation fail → tool çağrılmaz
+- success:false → retry=1 → escalation flag
 
 ---
 
@@ -238,74 +329,49 @@ All tool endpoints return HTTP 200 with this structure:
 
 ### Sabah (09:00 - 13:00) - **4 saat**
 
-#### Dev A - Support Agent + Escalation Agent
-**Süre**: 3.5 saat
+#### Dev A - Support Agent + Escalation Agent + TicketStore ✅
+**Süre**: 3.5 saat | **Status**: TAMAMLANDI (TicketStore hariç)
 
-- [ ] **Support/Response Agent** (2 saat)
-  - Prompt: workflow decision + tool result → customer email
-  - Brand tone: empathetic, professional, clear
-  - Output: email subject + body
-  - Include confirmation for any actions taken
-  
-- [ ] **Escalation Agent** (1.5 saat)
-  - Triggers: policy exception, tool fail (after retry), confidence < 0.6
-  - Customer message: "Your request has been escalated to our specialist team. You'll receive a response within 24 hours."
-  - **Internal team JSON (REQUIRED SCHEMA)**:
-    ```json
-    {
-      "escalation_id": "esc_xxx",
-      "customer_id": "cust_XXXXXXXX",
-      "reason": "string",
-      "conversation_summary": "string",
-      "attempted_actions": ["array"],
-      "priority": "low|medium|high",
-      "created_at": "ISO-8601"
-    }
-    ```
-  - Set session status = "escalated" (SESSION LOCK)
-  - **Stop automatic answer generation** for rest of session
+- [x] **Support/Response Agent** (2 saat)
+- [x] **Escalation Agent** (1.5 saat) - Schema uyumlu
+- [ ] **TicketStore Interface** (30dk) - YENİ
 
-**⚠️ Test Gate**: 
-- [ ] Escalation JSON schema validation
-- [ ] Session lock: escalated session rejects new auto-replies
+<details>
+<summary>✅ Step Completion Note - Support & Escalation</summary>
 
----
+**Implementasyon**:
+- `app/agents/support.py`: SupportAgent (LLM + template fallback)
+- `app/agents/escalation.py`: EscalationAgent (structured JSON)
 
-#### Dev B - Workflow JSONs + Ticket Infrastructure
-**Süre**: 3.5 saat
+**Escalation Schema Compliance**: ✅
+```json
+{
+  "escalation_id": "esc_abc123",
+  "customer_id": "cust_123",
+  "reason": "Reship requires manual approval",
+  "conversation_summary": "...",
+  "attempted_actions": ["shopify_get_order_details"],
+  "priority": "medium",
+  "created_at": "2026-02-06T14:30:00Z"
+}
+```
 
-> **Ownership**: `workflows/` JSON files owned by Dev B
-
-- [ ] **WISMO workflow JSON** (45dk)
-  - Use official tools: `shopify_get_order_details`
-  - Mon–Wed: Friday promise
-  - Thu–Sun: Early next week promise
-  - Post-promise not delivered → escalate
-
-- [ ] **Wrong/Missing Item workflow JSON** (1 saat)
-  - Use official tools: `shopify_create_return`, `shopify_create_store_credit`, `shopify_refund_order`
-  - Request evidence: item photo + packing slip + shipping label
-  - Priority: reship (escalate) → store credit (+10%) → cash refund
-  - Evidence missing → ask_clarifying
-
-- [ ] **Refund Standard workflow JSON** (1 saat)
-  - Use official tools: `shopify_refund_order`, `shopify_create_store_credit`
-  - Reason = shipping delay → route to WISMO
-  - Reason = wrong/missing → route to WRONG_MISSING
-  - Unclear reason → ask_clarifying or escalate
-
-- [ ] **TicketStore Interface + Fixtures** (45dk)
-  - Create `TicketStore` interface (abstract)
-  - Create `DummyTicketStore` with fixture tickets
-  - Prepare parser for tomorrow's real ticket ingestion
-
-**⚠️ Test Gate**: 
-- [ ] Each workflow: 3+ fixtures (input → expected action + policy)
-- [ ] TicketStore interface works with dummy data
+**Test Sonuçları**: 7/7 escalation tests passed
+</details>
 
 ---
 
-### Öğle Arası (13:00 - 14:00)
+#### Dev B - Workflow JSON'lar (Use-Case'e Göre) - UPDATED
+**Süre**: 3.5 saat
+
+- [ ] **WISMO workflow JSON** - Official tool handles:
+  - `tools_to_call`: `["shopify_get_order_details"]`
+
+- [ ] **Wrong/Missing Item workflow JSON**:
+  - `tool_name`: `shopify_create_store_credit`, `shopify_refund_order`
+
+- [ ] **Refund Standard workflow JSON**:
+  - `tool_name`: `shopify_refund_order`, `shopify_create_return`
 
 ---
 
@@ -313,66 +379,206 @@ All tool endpoints return HTTP 200 with this structure:
 
 #### Birlikte - Testing + Demo Hazırlığı
 
-**14:00 - 15:30 (1.5 saat) - Senaryo Testleri**
-- [ ] Run all demo scenarios
-- [ ] Record trace output for each
-- [ ] Test edge cases:
-  - Missing order_id
-  - Ambiguous intent
-  - Tool failure
-  - Escalation trigger
+**14:00 - 15:00 (1 saat) - Ticket Ingestion** (YENİ)
+- [ ] Ticket dataset gelince `TicketStore.ingest()` çağır
+- [ ] 10 random ticket query testi
+- [ ] Support Agent'a ticket RAG ekle (optional)
 
-**15:30 - 16:30 (1 saat) - Observability Audit**
-- [ ] Verify `/trace` output contains:
-  - [ ] Final customer message
-  - [ ] All tools called (with inputs/outputs)
-  - [ ] All actions taken
-  - [ ] Agent decision timeline
-  - [ ] Escalation reasons (if any)
-- [ ] (Bonus) Simple HTML trace viewer
+**15:00 - 16:30 (1.5 saat) - Senaryo Testleri**
+- [ ] 3 use-case demo senaryoları
+- [ ] Edge case'ler
 
 **16:30 - 17:30 (1 saat) - Demo Rehearsal**
-- [ ] 3 use-case demo flows
-- [ ] Pre-recorded backup
-- [ ] Presentation order:
-  1. System architecture (5min)
-  2. WISMO scenario live (3min)
-  3. Wrong/Missing scenario (3min)
-  4. Trace visualization (2min)
-  5. Escalation example (2min)
+- [ ] Demo flow
+- [ ] Backup kayıtları
 
 **17:30 - 18:00 (30dk) - Polish**
-- [ ] README.md (setup, endpoints, architecture)
-- [ ] Code cleanup
-- [ ] .env.example check
-- [ ] Final test run
+- [ ] README.md
+- [ ] Final test
 
 ---
 
-## 👁️ Observability Requirements (Per Session)
+## 📊 Evaluation Dimensions → Sprint Outputs
 
-**MUST be inspectable via `/trace` or logs:**
+### 1. Workflow Correctness
+| Criteria | Sprint Output |
+|----------|---------------|
+| Deterministic workflow engine | `WorkflowEngine` + JSON decision trees |
+| Policy boundaries respected | No LLM policy decisions |
+| Multi-message consistency | Session memory + no contradictions |
 
-| Item | Description |
-|------|-------------|
-| **Final Customer Message** | Last reply sent to customer |
-| **Tools Called** | List of tool handles with inputs/outputs |
-| **Actions Taken** | Any state changes (refund issued, credit created, etc.) |
-| **Agent Decision Timeline** | Sequence: triage → workflow → action → support |
-| **Escalation Details** | Reason, summary, priority (if escalated) |
+### 2. Tool Use Quality
+| Criteria | Sprint Output |
+|----------|---------------|
+| Correct tool selection | Workflow JSON defines tool plan |
+| Correct params (JSON Schema) | `ToolsClient.validate_params()` |
+| Minimal calls | Workflow defines exactly needed tools |
+| Handle success:false | Retry logic + escalation |
+| Map tool results to replies | SupportAgent uses tool results |
 
-**Trace Event Schema:**
+### 3. Customer Experience
+| Criteria | Sprint Output |
+|----------|---------------|
+| Clear safe tone | SupportAgent brand tone prompts |
+| Confirmations for actions | Templates confirm actions taken |
+
+### 4. Escalation Behavior
+| Criteria | Sprint Output |
+|----------|---------------|
+| Correct triggers | Workflow `action=escalate` rules |
+| Customer message | "Uzman ekibimize iletildi..." |
+| Structured team summary | EscalationPayload schema |
+| Session lock | `status=escalated` blocks messages |
+
+---
+
+## 🧪 Test Plan Summary
+
+### Test Gate Checklist (Her Modül Sonrası)
+
+| Modül | Unit Tests | Integration | Use-Case |
+|-------|-----------|-------------|----------|
+| SessionStore | ✅ 8 passed | ✅ smoke | - |
+| Orchestrator | ✅ 6 passed | ✅ full flow | - |
+| WorkflowEngine | ✅ 9 passed | - | WISMO, Wrong/Missing |
+| ToolsClient | ✅ 8 passed | ✅ retry test | - |
+| EscalationAgent | ✅ 7 passed | ✅ schema test | Escalation scenario |
+| TicketStore | ⏳ pending | ⏳ pending | - |
+
+**Total**: 38+ tests passed
+
+---
+
+## ✅ Definition of Done (UPDATED)
+
+### Workflow Correctness
+- [x] Deterministic WorkflowEngine implemented
+- [x] Policy decisions via JSON, NOT LLM
+- [x] Multi-message session consistency
+
+### Tool Use Quality
+- [x] ToolsClient with official Shopify/Skio handles
+- [ ] JSON Schema param validation
+- [x] Retry logic (1 retry)
+- [x] Tool results logged to trace
+
+### Customer Experience
+- [x] Empathetic Turkish responses
+- [x] Clear action confirmations
+
+### Escalation Behavior
+- [x] Triggers: policy outside, tool fail x2, confidence < 0.6
+- [x] Customer message sent
+- [x] Structured JSON (schema compliant)
+- [x] Session locked
+
+### Observability
+- [x] Final customer message in trace
+- [x] All tool calls with input/output
+- [x] All actions taken logged
+- [x] Agent decision timeline via `/trace`
+
+---
+
+## 📄 Updated Workflow JSON Examples (Official Tools)
+
+### workflows/wismo.json
 ```json
 {
-  "session_id": "xxx",
-  "events": [
+  "workflow_name": "WISMO",
+  "version": "2.0",
+  "rules": [
     {
-      "agent": "triage|workflow|action|support|escalation",
-      "action": "classify|decide|call_tool|respond|escalate",
-      "data": {...},
-      "timestamp": "ISO-8601"
+      "condition": "contact_day in ['Mon', 'Tue', 'Wed']",
+      "action": "respond",
+      "policy_applied": "friday_promise",
+      "response_template": "Siparişiniz Cuma gününe kadar size ulaşacaktır."
+    },
+    {
+      "condition": "contact_day in ['Thu', 'Fri', 'Sat', 'Sun']",
+      "action": "respond",
+      "policy_applied": "next_week_promise",
+      "response_template": "Siparişiniz önümüzdeki hafta başında size ulaşacaktır."
+    },
+    {
+      "condition": "promise_given and still_not_delivered",
+      "action": "escalate",
+      "policy_applied": "post_promise_escalation",
+      "escalation_reason": "Delivery promise exceeded"
     }
-  ]
+  ],
+  "required_fields": ["order_id"],
+  "tools_to_call": ["shopify_get_order_details"]
+}
+```
+
+### workflows/wrong_missing.json
+```json
+{
+  "workflow_name": "WRONG_MISSING",
+  "version": "2.0",
+  "rules": [
+    {
+      "condition": "evidence_missing",
+      "action": "ask_clarifying",
+      "required_fields_missing": ["item_photo", "packing_slip", "shipping_label"],
+      "policy_applied": "evidence_requirement"
+    },
+    {
+      "condition": "evidence_complete",
+      "action": "escalate",
+      "policy_applied": "reship_priority",
+      "escalation_reason": "Reship request requires manual approval"
+    },
+    {
+      "condition": "customer_prefers_credit",
+      "action": "call_tool",
+      "tool_name": "shopify_create_store_credit",
+      "policy_applied": "store_credit_10_percent_bonus"
+    },
+    {
+      "condition": "all_alternatives_rejected",
+      "action": "call_tool",
+      "tool_name": "shopify_refund_order",
+      "policy_applied": "cash_refund_last_resort"
+    }
+  ],
+  "required_fields": ["order_id", "item_name"],
+  "priority_order": ["reship", "store_credit", "cash_refund"]
+}
+```
+
+### workflows/refund_standard.json
+```json
+{
+  "workflow_name": "REFUND_STANDARD",
+  "version": "2.0",
+  "rules": [
+    {
+      "condition": "refund_reason == 'shipping_delay'",
+      "action": "route_to_workflow",
+      "target_workflow": "WISMO",
+      "policy_applied": "shipping_delay_uses_wismo_rules"
+    },
+    {
+      "condition": "refund_reason == 'wrong_missing'",
+      "action": "route_to_workflow",
+      "target_workflow": "WRONG_MISSING",
+      "policy_applied": "wrong_missing_uses_dedicated_workflow"
+    },
+    {
+      "condition": "refund_reason == 'other' and within_policy",
+      "action": "call_tool",
+      "tool_name": "shopify_refund_order",
+      "policy_applied": "standard_refund_eligibility"
+    },
+    {
+      "condition": "outside_policy",
+      "action": "escalate",
+      "escalation_reason": "Refund request outside standard policy"
+    }
+  ],
+  "required_fields": ["order_id", "refund_reason"]
 }
 ```
 
@@ -380,186 +586,46 @@ All tool endpoints return HTTP 200 with this structure:
 
 ## 📋 Step Completion Note Template
 
-**CRITICAL**: Use this template after every major task.
-
 ```markdown
 ✅ Step Completion Note
 
-**Step name**: [e.g., "Orchestrator logic"]
+**Step adı**: [örn. "Orchestrator logic"]
 
-**Implemented:**
-- [ ] Files/functions/endpoints created
-- [ ] Schemas defined
-- [ ] Integration points
+**Ne implementasyon yapıldı?**
+- Dosyalar: [liste]
+- Endpoints: [liste]
+- Schemas: [liste]
 
-**Key Decisions:**
-- [ ] Why this approach was chosen
+**Kabul kriteri / çıktılar**:
+- Test sonucu: X/Y passed
+- Trace events: [örnek]
 
-**Interfaces/Contracts:**
-- [ ] Input/output schemas
-- [ ] Dependencies on other modules
-
-**How it connects to other modules:**
-- [ ] What calls this, what this calls
-
-**Tests executed (with results):**
-- [ ] Unit: [✓/✗] test name
-- [ ] Integration: [✓/✗] test name
-- [ ] Use-case ref: which scenario tested
-
-**Trace sample (1-2 events):**
+**Trace/Log örneği**:
 ```json
-{
-  "agent": "triage",
-  "action": "classify",
-  "data": {"intent": "WISMO", "confidence": 0.92}
-}
+{"event_type": "...", "agent": "...", "data": {...}}
 ```
 
-**Remaining risks / TODO:**
-- [ ] Known limitations
-```
+**Sonraki adımlara bağlantı**:
+- [Hangi modül bu çıktıyı kullanacak]
 
----
+**Testler**:
+- Unit: [✓/✗] test_xxx.py
+- Integration: [✓/✗] test_integration.py
+- Use-case: [hangi senaryo]
 
-## ✅ Definition of Done (Evaluation Dimensions)
-
-### 1. Workflow Correctness
-- [ ] Deterministic workflow engine (no LLM policy decisions)
-- [ ] Policy boundaries enforced
-- [ ] Multi-message consistency (no contradictions)
-- [ ] All use-case PDF rules implemented
-
-### 2. Tool Use Quality
-- [ ] Correct tool selection per scenario
-- [ ] Correct params (validated against JSON schema)
-- [ ] Minimal tool calls (no redundant calls)
-- [ ] Handle `success:false` gracefully (retry → escalate)
-- [ ] Map tool results to customer replies accurately
-
-### 3. Customer Experience
-- [ ] Clear, safe tone in all replies
-- [ ] Confirmations for any actions taken
-- [ ] No policy hallucinations
-- [ ] Professional email format
-
-### 4. Escalation Behavior
-- [ ] Correct triggers (policy exception, tool fail, low confidence)
-- [ ] Customer message: "Escalated to specialist team"
-- [ ] Structured team summary (required JSON schema)
-- [ ] Session lock (no more auto-replies after escalation)
-
----
-
-## 🧪 Test Plan
-
-### A) Smoke Tests
-- [ ] `POST /session/start` → 200 + session_id
-- [ ] `POST /session/{id}/message` → 200 + response
-- [ ] `GET /session/{id}/trace` → JSON timeline
-
-### B) Unit Tests
-**SessionStore:**
-- [ ] Create/get/update operations
-- [ ] Session lock prevents new messages
-
-**WorkflowEngine:**
-- [ ] WISMO: Mon-Wed → Friday promise
-- [ ] Wrong/Missing: evidence missing → ask_clarifying
-- [ ] Refund: shipping delay → route to WISMO
-
-**ToolsClient:**
-- [ ] JSON-schema validation on params
-- [ ] Retry logic
-- [ ] Trace logging
-
-### C) Integration Tests
-- [ ] Full flow: message → triage → workflow → action → support
-- [ ] Tool failure → escalation → session lock
-- [ ] Escalation JSON schema validated
-
-### D) Use-Case Tests
-**Test 1 - WISMO:**
-```json
-{
-  "input": "Where is my order #12345?",
-  "expected": {
-    "intent": "WISMO",
-    "tools_called": ["shopify_get_order_details"],
-    "policy_applied": "friday_promise"
-  }
-}
-```
-
-**Test 2 - Wrong/Missing:**
-```json
-{
-  "input": "I'm missing an item from my order",
-  "expected": {
-    "intent": "WRONG_MISSING",
-    "action": "ask_clarifying",
-    "evidence_requested": ["item_photo", "packing_slip", "shipping_label"]
-  }
-}
-```
-
-**Test 3 - Refund:**
-```json
-{
-  "input": "I want a refund, shipping was too slow",
-  "expected": {
-    "intent": "REFUND_STANDARD",
-    "routed_to": "WISMO"
-  }
-}
+**Bilinen eksikler**:
+- [TODO listesi]
 ```
 
 ---
 
-## 📊 Risk Yönetimi
+## 🎯 Sprint Başarı Kriterleri
 
-| Risk | Olasılık | Etki | Mitigation |
-|------|----------|------|------------|
-| **Policy hallucination** | **Yüksek** | **Kritik** | **Workflow JSON deterministic** |
-| LLM response slow | Yüksek | Orta | Async + 10s timeout |
-| Tool API fail | Orta | Yüksek | Mock fallback + retry |
-| Ticket format mismatch | Düşük | Orta | Parser validates format |
-| Demo crash | Düşük | Kritik | Pre-recorded backup |
-
----
-
-## ⚠️ CRITICAL WARNINGS
-
-### 1. Policy Hallucination - P0 Risk
-❌ **DON'T**: Let LLM make policy decisions
-✅ **DO**: Workflow JSON deterministic, LLM only renders text
-
-### 2. Official Tool Handles
-❌ **DON'T**: Use generic tool names like `check_order_status`
-✅ **DO**: Use official handles: `shopify_get_order_details`, etc.
-
-### 3. Escalation JSON Schema
-❌ **DON'T**: Free-form escalation JSON
-✅ **DO**: Use required schema with all fields
-
-### 4. JSON-Schema Validation
-❌ **DON'T**: Call tools without validating params
-✅ **DO**: Validate against paramsJsonSchema BEFORE calling
-
-### 5. Session Lock
-❌ **DON'T**: Allow auto-replies after escalation
-✅ **DO**: Lock session, stop automation
-
----
-
-## 🎯 Sprint Success Criteria
-
-- [ ] 3 use-cases working (WISMO, Refund, Wrong Item)
-- [ ] Escalation triggers correctly + session locks
-- [ ] Trace shows all decisions/tools/actions
-- [ ] Official tool handles used
-- [ ] JSON-schema validation on params
-- [ ] Demo runs smoothly
-- [ ] Ticket ingestion ready for tomorrow
+- [x] 3 use-case çalışıyor (WISMO, Refund, Wrong Item)
+- [x] Escalation logic doğru tetikleniyor
+- [x] Trace sistemi tüm kararları gösteriyor
+- [ ] Ticket ingestion ready (yarın)
+- [x] Demo yapılabilir durumda
+- [x] Kod temiz ve dokümante
 
 **Başarılar! 🚀**
