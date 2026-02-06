@@ -1,7 +1,7 @@
 """
 Triage Agent
 Version: 1.0
-Developer: Dev B
+Developer: Dev B (moved to app/agents by Dev A)
 
 Classifies customer messages into intents and extracts entities.
 Uses OpenAI GPT-4o mini with structured JSON outputs.
@@ -171,6 +171,17 @@ class TriageAgent:
                 "needs_human": result.needs_human
             }
         }
+
+
+# Global instance (created lazily to avoid import errors when API key not set)
+_triage_agent = None
+
+def get_triage_agent() -> TriageAgent:
+    """Get or create the global triage agent instance."""
+    global _triage_agent
+    if _triage_agent is None:
+        _triage_agent = TriageAgent()
+    return _triage_agent
 
 
 # Convenience function for quick classification

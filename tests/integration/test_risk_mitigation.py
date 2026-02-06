@@ -6,8 +6,8 @@ import pytest
 from unittest.mock import Mock, patch
 import os
 
-from agents.triage_agent import TriageAgent
-from agents.action_agent import ActionAgent
+from app.agents.triage import TriageAgent
+from app.agents.action import ActionAgent
 from tools.client import ToolsClient, ToolCallResult
 from schemas.workflow import WorkflowDecision, ToolPlan
 from schemas.session import Session, CustomerInfo, CaseContext
@@ -20,7 +20,7 @@ class TestTriageConfidenceRisk:
     @pytest.fixture
     def mock_openai_client(self):
         """Mock OpenAI client."""
-        with patch("agents.triage_agent.OpenAI") as mock_openai:
+        with patch("app.agents.triage.OpenAI") as mock_openai:
             client = Mock()
             mock_openai.return_value = client
             yield client
@@ -77,7 +77,7 @@ class TestTriageConfidenceRisk:
     def test_configurable_threshold(self):
         """Confidence threshold should be configurable."""
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
-            with patch("agents.triage_agent.OpenAI"):
+            with patch("app.agents.triage.OpenAI"):
                 strict_agent = TriageAgent(confidence_threshold=0.9)
                 lenient_agent = TriageAgent(confidence_threshold=0.5)
                 
@@ -192,8 +192,8 @@ class TestToolFailureHandlingRisk:
         ]
         
         # Patch config to ensure auto-escalation is enabled
-        with patch("agents.action_agent.TOOL_FAILURE_THRESHOLD", 2):
-            with patch("agents.action_agent.AUTO_ESCALATE_ON_TOOL_FAILURE", True):
+        with patch("app.agents.action.TOOL_FAILURE_THRESHOLD", 2):
+            with patch("app.agents.action.AUTO_ESCALATE_ON_TOOL_FAILURE", True):
                 result = action_agent.execute(sample_session, decision)
         
         assert result["should_escalate"] is True
@@ -247,7 +247,7 @@ class TestEndToEndRiskScenarios:
     def test_ambiguous_message_low_confidence_escalation(self):
         """Ambiguous message → low confidence → ask_clarifying/escalate."""
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
-            with patch("agents.triage_agent.OpenAI") as mock_openai_cls:
+            with patch("app.agents.triage.OpenAI") as mock_openai_cls:
                 client = Mock()
                 mock_openai_cls.return_value = client
                 

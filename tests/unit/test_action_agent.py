@@ -6,7 +6,7 @@ import pytest
 from unittest.mock import Mock, MagicMock
 from datetime import datetime
 
-from agents.action_agent import ActionAgent
+from app.agents.action import ActionAgent
 from tools.client import ToolsClient, ToolCallResult
 from schemas.workflow import WorkflowDecision, ToolPlan
 from schemas.session import Session, CustomerInfo, CaseContext, Message
