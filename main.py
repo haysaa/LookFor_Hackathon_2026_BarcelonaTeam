@@ -4,7 +4,10 @@ Entry point for FastAPI application.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
+import os
 
 # Load environment variables
 load_dotenv()
@@ -29,10 +32,21 @@ app.add_middleware(
 from app.api import router as session_router
 app.include_router(session_router, tags=["Sessions"])
 
+# Mount static files for demo UI
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 
 @app.get("/")
 async def root():
-    """Root endpoint with API info."""
+    """Redirect to demo UI."""
+    return RedirectResponse(url="/static/index.html")
+
+
+@app.get("/api")
+async def api_info():
+    """API info endpoint."""
     return {
         "name": "LookFor Support Agent",
         "version": "1.0.0",
@@ -47,3 +61,4 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+

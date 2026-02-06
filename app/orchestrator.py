@@ -122,13 +122,25 @@ class Orchestrator:
             )
             return {"intent": "UNKNOWN", "confidence": 0.0, "entities": {}}
         
-        # Call actual triage agent (Dev B)
-        result = self.triage_agent.classify(session_id, message)
+        # Call actual triage agent - returns TriageResult Pydantic model
+        triage_result = self.triage_agent.classify(message)
+        
+        # Convert Pydantic model to dict for compatibility
+        result = {
+            "intent": triage_result.intent.value if hasattr(triage_result.intent, 'value') else str(triage_result.intent),
+            "confidence": triage_result.confidence,
+            "entities": triage_result.entities.model_dump() if hasattr(triage_result.entities, 'model_dump') else {},
+            "needs_human": triage_result.needs_human,
+            "reasoning": triage_result.reasoning
+        }
         
         # Update session with triage result
         session = session_store.get(session_id)
         if result.get("intent"):
-            session.intent = Intent(result["intent"])
+            try:
+                session.intent = Intent(result["intent"])
+            except ValueError:
+                session.intent = Intent.UNKNOWN
             session.confidence = result.get("confidence", 0.0)
         
         # Extract entities to case context
@@ -345,12 +357,28 @@ def wire_agents():
     """Wire all available agents into the orchestrator."""
     from app.agents.support import support_agent
     from app.agents.escalation import escalation_agent
+    from app.workflow_engine import workflow_engine
     
     orchestrator.set_support_agent(support_agent)
     orchestrator.set_escalation_agent(escalation_agent)
+    orchestrator.set_workflow_engine(workflow_engine)
     
-    # Note: Triage Agent and Action Agent are Dev B's responsibility
-    # They will be wired when available
+    # Wire Triage Agent (requires API key)
+    try:
+        from app.agents.triage import TriageAgent
+        triage_agent = TriageAgent()
+        orchestrator.set_triage_agent(triage_agent)
+    except Exception as e:
+        print(f"Warning: Could not initialize TriageAgent: {e}")
+    
+    # Wire Action Agent
+    try:
+        from app.agents.action import ActionAgent
+        action_agent = ActionAgent()
+        orchestrator.set_action_agent(action_agent)
+    except Exception as e:
+        print(f"Warning: Could not initialize ActionAgent: {e}")
 
 wire_agents()
+
 
