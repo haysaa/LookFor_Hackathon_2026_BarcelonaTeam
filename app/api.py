@@ -32,7 +32,7 @@ async def start_session(request: SessionStartRequest):
     return SessionStartResponse(
         session_id=session.id,
         status=session.status,
-        message=f"Merhaba {request.first_name}, size nasıl yardımcı olabilirim?"
+        message=f"Welcome {request.first_name}! How can I help you today?"
     )
 
 

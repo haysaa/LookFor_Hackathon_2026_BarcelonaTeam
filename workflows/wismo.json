@@ -41,7 +41,7 @@
             "policy_applied": "fetch_order_status",
             "tool_plan": [
                 {
-                    "tool_name": "check_order_status",
+                    "tool_name": "shopify_get_order_details",
                     "params_source": {
                         "order_id": "context.order_id"
                     }
@@ -66,7 +66,11 @@
                     {
                         "field": "contact_day",
                         "operator": "in",
-                        "value": ["Mon", "Tue", "Wed"]
+                        "value": [
+                            "Mon",
+                            "Tue",
+                            "Wed"
+                        ]
                     },
                     {
                         "field": "promise_given",
@@ -96,7 +100,12 @@
                     {
                         "field": "contact_day",
                         "operator": "in",
-                        "value": ["Thu", "Fri", "Sat", "Sun"]
+                        "value": [
+                            "Thu",
+                            "Fri",
+                            "Sat",
+                            "Sun"
+                        ]
                     },
                     {
                         "field": "promise_given",

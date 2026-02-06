@@ -67,7 +67,7 @@ class TestEscalationAgent:
         )
         
         assert "customer_message" in result
-        assert "24 saat" in result["customer_message"]
+        assert "24 hours" in result["customer_message"]
     
     def test_priority_override(self):
         """Priority can be explicitly set."""

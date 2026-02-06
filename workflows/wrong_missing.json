@@ -15,8 +15,8 @@
     ],
     "tools_available": [
         "check_order_status",
-        "issue_store_credit",
-        "process_refund",
+        "shopify_create_store_credit",
+        "shopify_refund_order",
         "request_reship"
     ],
     "priority_order": [
@@ -119,7 +119,7 @@
             "policy_applied": "store_credit_10_percent_bonus",
             "tool_plan": [
                 {
-                    "tool_name": "issue_store_credit",
+                    "tool_name": "shopify_create_store_credit",
                     "params_source": {
                         "customer_id": "context.customer_id",
                         "amount": "context.order_total",
@@ -150,7 +150,7 @@
             "policy_applied": "cash_refund_last_resort",
             "tool_plan": [
                 {
-                    "tool_name": "process_refund",
+                    "tool_name": "shopify_refund_order",
                     "params_source": {
                         "order_id": "context.order_id",
                         "reason": "Wrong/missing item - customer requested cash refund"

@@ -72,6 +72,8 @@ class CaseContext(BaseModel):
     tracking_number: Optional[str] = None
     item_name: Optional[str] = None
     refund_reason: Optional[str] = None
+    order_date: Optional[str] = None
+    shipping_status: Optional[str] = None
     evidence: dict[str, bool] = Field(default_factory=lambda: {
         "item_photo": False,
         "packing_slip": False,

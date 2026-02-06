@@ -75,7 +75,7 @@ class Orchestrator:
         # Guard: escalated sessions are locked
         if session.status == SessionStatus.ESCALATED:
             return {
-                "reply": "Talebiniz uzman ekibimize iletilmiştir. En kısa sürede size dönüş yapılacaktır.",
+                "reply": "Your request has been escalated to our specialist team. We will get back to you shortly.",
                 "status": SessionStatus.ESCALATED,
                 "intent": session.intent,
                 "locked": True
@@ -226,17 +226,17 @@ class Orchestrator:
         """Generate a clarifying question for missing fields."""
         missing = decision.get("required_fields_missing", [])
         
-        # Map fields to questions
+        # Map fields to questions (English only)
         field_questions = {
-            "order_id": "Sipariş numaranızı paylaşır mısınız?",
-            "item_photo": "Aldığınız ürünlerin fotoğrafını paylaşır mısınız?",
-            "packing_slip": "Paket içindeki teslimat fişinin fotoğrafını paylaşır mısınız?",
-            "shipping_label": "Kargo etiketinin fotoğrafını paylaşır mısınız?",
-            "refund_reason": "İade talebinizin nedenini belirtir misiniz?"
+            "order_id": "Could you please provide your order number?",
+            "item_photo": "Could you please share a photo of the items you received?",
+            "packing_slip": "Could you please share a photo of the packing slip?",
+            "shipping_label": "Could you please share a photo of the shipping label?",
+            "refund_reason": "Could you please let us know the reason for your refund request?"
         }
         
-        questions = [field_questions.get(f, f"Lütfen {f} bilgisini paylaşın.") for f in missing]
-        reply = " ".join(questions) if questions else "Daha fazla bilgi verir misiniz?"
+        questions = [field_questions.get(f, f"Please provide your {f}.") for f in missing]
+        reply = " ".join(questions) if questions else "Could you please provide more details?"
         
         # Save response
         response_msg = Message(role=MessageRole.AGENT, content=reply)
@@ -246,31 +246,75 @@ class Orchestrator:
         return {"reply": reply}
     
     def _handle_tool_call(self, session_id: str, decision: dict) -> dict:
-        """Execute tools via Action Agent."""
-        if not self.action_agent:
-            # Stub: simulate tool success
-            TraceLogger.log_tool_call(
-                session_id,
-                tool_name="stub_tool",
-                params={},
-                response={"success": True, "data": {"status": "stub"}},
-                success=True
-            )
+        """Execute tools via ToolsClient directly."""
+        from app.tools.client import tools_client
+        
+        session = session_store.get(session_id)
+        tool_plan = decision.get("tool_plan", [])
+        
+        if not tool_plan:
+            # No tools to execute, just respond
             return self._handle_respond(session_id, decision)
         
-        # Execute tools
-        tool_plan = decision.get("tool_plan", [])
-        tool_results = self.action_agent.execute(session_id, tool_plan)
+        # Execute each tool
+        all_success = True
+        should_escalate = False
+        last_result = None  # Store last successful tool result for response generation
         
-        # Check for failures
-        if tool_results.get("should_escalate"):
+        for tool_item in tool_plan:
+            tool_name = tool_item.get("tool_name") if isinstance(tool_item, dict) else getattr(tool_item, "tool_name", None)
+            params = tool_item.get("params", {}) if isinstance(tool_item, dict) else getattr(tool_item, "params", {})
+            
+            if not tool_name:
+                continue
+            
+            # Resolve placeholders from session context
+            resolved_params = {}
+            for key, value in params.items():
+                if isinstance(value, str) and value.startswith("{") and value.endswith("}"):
+                    field = value[1:-1]  # Remove braces
+                    if hasattr(session.case_context, field):
+                        resolved_params[key] = getattr(session.case_context, field)
+                    else:
+                        resolved_params[key] = value
+                else:
+                    resolved_params[key] = value
+            
+            # Execute tool
+            result = tools_client.execute(
+                session_id=session_id,
+                tool_name=tool_name,
+                params=resolved_params
+            )
+            
+            # Store the last successful result for response generation
+            last_result = result
+            
+            if not result.get("success"):
+                all_success = False
+            
+            if result.get("should_escalate"):
+                should_escalate = True
+                break
+            
+            # Update session context with tool results
+            if result.get("success") and result.get("data"):
+                data = result["data"]
+                if data.get("status"):
+                    session.case_context.shipping_status = data["status"]
+                if data.get("tracking_number"):
+                    session.case_context.tracking_number = data["tracking_number"]
+                session_store.update(session)
+        
+        # Check for escalation
+        if should_escalate:
             return self._handle_escalation(session_id, {
                 "escalation_reason": "Tool execution failed after retry"
             })
         
-        # Re-run workflow with tool results
-        new_decision = self._run_workflow(session_id)
-        return self._execute_decision(session_id, new_decision)
+        # Tool executed successfully - generate response based on tool results
+        # Don't re-run workflow to avoid recursion
+        return self._handle_respond(session_id, decision, last_result)
     
     def _handle_escalation(self, session_id: str, decision: dict) -> dict:
         """Handle escalation - lock session and generate messages."""
@@ -293,7 +337,7 @@ class Orchestrator:
         TraceLogger.log_escalation(session_id, reason, payload.model_dump())
         
         # Customer message
-        reply = "Talebiniz uzman ekibimize iletilmiştir. 24 saat içinde size dönüş yapılacaktır. Anlayışınız için teşekkür ederiz."
+        reply = "Your request has been escalated to our specialist team. We will get back to you within 24 hours. Thank you for your patience."
         
         response_msg = Message(role=MessageRole.AGENT, content=reply)
         session_store.add_message(session_id, response_msg)
@@ -304,11 +348,19 @@ class Orchestrator:
             "escalation_payload": payload.model_dump()
         }
     
-    def _handle_respond(self, session_id: str, decision: dict) -> dict:
+    def _handle_respond(self, session_id: str, decision: dict, tool_results: dict = None) -> dict:
         """Generate response via Support Agent."""
         if not self.support_agent:
-            # Stub response
-            template = decision.get("response_template", "Size yardımcı olmaktan mutluluk duyarız.")
+            # Stub response - include tool data if available
+            if tool_results and tool_results.get("success") and tool_results.get("data"):
+                data = tool_results["data"]
+                template = f"Your order status is: {data.get('status', 'N/A')}. "
+                if data.get("estimated_delivery"):
+                    template += f"Estimated delivery: {data['estimated_delivery']}. "
+                if data.get("tracking_number"):
+                    template += f"Tracking: {data['tracking_number']}."
+            else:
+                template = decision.get("response_template", "We're happy to assist you.")
             
             response_msg = Message(role=MessageRole.AGENT, content=template)
             session_store.add_message(session_id, response_msg)
@@ -318,7 +370,7 @@ class Orchestrator:
         
         # Generate response via Support Agent
         session = session_store.get(session_id)
-        response = self.support_agent.generate_response(session, decision)
+        response = self.support_agent.generate_response(session, decision, tool_results)
         
         response_msg = Message(role=MessageRole.AGENT, content=response["body"])
         session_store.add_message(session_id, response_msg)
