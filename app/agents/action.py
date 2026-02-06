@@ -1,13 +1,12 @@
 """
 ActionAgent - Executes tools based on workflow decisions
 Version: 1.0
-Developer: Dev B
+Developer: Dev B (moved to app/agents by Dev A)
 
 Handles tool execution when WorkflowEngine decides next_action=call_tool.
 Resolves parameter placeholders from session context and manages escalation.
 """
 from typing import Dict, Any, Optional
-from dataclasses import asdict
 
 from tools.client import ToolsClient, ToolCallResult
 from schemas.workflow import WorkflowDecision, ToolPlan

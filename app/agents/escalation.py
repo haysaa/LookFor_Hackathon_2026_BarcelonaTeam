@@ -22,7 +22,7 @@ class EscalationAgent:
     """
     
     # Standard customer message for escalation
-    CUSTOMER_MESSAGE = "Talebiniz uzman ekibimize iletilmiştir. 24 saat içinde size dönüş yapılacaktır. Anlayışınız için teşekkür ederiz."
+    CUSTOMER_MESSAGE = "Your request has been escalated to our specialist team. We will get back to you within 24 hours. Thank you for your patience."
     
     def escalate(
         self,

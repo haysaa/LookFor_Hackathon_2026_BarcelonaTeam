@@ -9,8 +9,8 @@
     "optional_fields": [],
     "tools_available": [
         "check_order_status",
-        "process_refund",
-        "issue_store_credit"
+        "shopify_refund_order",
+        "shopify_create_store_credit"
     ],
     "priority": 3,
     "refund_reasons": [
@@ -146,7 +146,7 @@
             "policy_applied": "store_credit_with_bonus",
             "tool_plan": [
                 {
-                    "tool_name": "issue_store_credit",
+                    "tool_name": "shopify_create_store_credit",
                     "params_source": {
                         "customer_id": "context.customer_id",
                         "amount": "context.order_total",
@@ -180,7 +180,7 @@
             "policy_applied": "standard_refund",
             "tool_plan": [
                 {
-                    "tool_name": "process_refund",
+                    "tool_name": "shopify_refund_order",
                     "params_source": {
                         "order_id": "context.order_id",
                         "reason": "Standard refund request by customer"

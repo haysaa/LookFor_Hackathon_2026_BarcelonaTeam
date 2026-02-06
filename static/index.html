@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LookFor Support Demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --bg-input: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --error: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            height: 100vh;
+            /* Fixed height to prevent page scroll */
+            overflow: hidden;
+            /* Prevent body scroll */
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        }
+
+        .header h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.75rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+
+
+        .status-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .status-badge.connected {
+            color: var(--success);
+        }
+
+        .status-badge.escalated {
+            color: var(--warning);
+        }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            min-height: 0;
+            /* Important for nested flex scrolling */
+        }
+
+        .chat-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            min-height: 0;
+        }
+
+        .trace-panel {
+            width: 400px;
+            background: var(--bg-card);
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .trace-header {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .trace-header::before {
+            content: '📊';
+        }
+
+        .trace-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            scroll-behavior: smooth;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .trace-event {
+            background: var(--bg-input);
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+            font-size: 0.8rem;
+            border-left: 3px solid var(--primary);
+        }
+
+        .trace-event.triage {
+            border-left-color: #8b5cf6;
+        }
+
+        .trace-event.workflow {
+            border-left-color: #06b6d4;
+        }
+
+        .trace-event.tool {
+            border-left-color: #f59e0b;
+        }
+
+        .trace-event.response {
+            border-left-color: #22c55e;
+        }
+
+        .trace-event.escalation {
+            border-left-color: #ef4444;
+        }
+
+        .trace-event-type {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            letter-spacing: 0.05em;
+        }
+
+        .trace-event-data {
+            color: var(--text-secondary);
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.75rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            scroll-behavior: smooth;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 1rem 1.25rem;
+            border-radius: 1rem;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.customer {
+            align-self: flex-end;
+            background: var(--primary);
+            border-bottom-right-radius: 0.25rem;
+        }
+
+        .message.agent {
+            align-self: flex-start;
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom-left-radius: 0.25rem;
+        }
+
+        .message.system {
+            align-self: center;
+            background: var(--bg-input);
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            padding: 0.5rem 1rem;
+        }
+
+        .message-content {
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+
+        .message-meta {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 0.5rem;
+        }
+
+        .input-container {
+            padding: 1rem;
+            background: var(--bg-card);
+            border-radius: 1rem;
+            display: flex;
+            gap: 0.75rem;
+            align-items: flex-end;
+        }
+
+        .input-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            border: none;
+            border-radius: 0.75rem;
+            background: var(--bg-input);
+            color: var(--text-primary);
+            font-size: 1rem;
+            resize: none;
+            min-height: 50px;
+            max-height: 150px;
+            font-family: inherit;
+        }
+
+        textarea:focus {
+            outline: 2px solid var(--primary);
+        }
+
+        textarea::placeholder {
+            color: var(--text-secondary);
+        }
+
+        button {
+            padding: 0.875rem 1.5rem;
+            border: none;
+            border-radius: 0.75rem;
+            background: var(--primary);
+            color: white;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        button:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .start-form {
+            background: var(--bg-card);
+            padding: 2rem;
+            border-radius: 1rem;
+            max-width: 400px;
+            margin: 2rem auto;
+        }
+
+        .start-form h2 {
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            background: var(--bg-input);
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .form-group input:focus {
+            outline: 2px solid var(--primary);
+        }
+
+        .start-form button {
+            width: 100%;
+            justify-content: center;
+            margin-top: 1rem;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>
+            <img src="/static/logo.png" alt="Logo" style="height: 40px; width: auto; margin-right: 10px;">
+            LookFor Support Demo
+        </h1>
+        <span id="statusBadge" class="status-badge">Not Connected</span>
+    </div>
+
+    <div id="startSection" class="main-container">
+        <div class="start-form">
+            <h2>Start Session</h2>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="customerEmail" value="demo@customer.com" placeholder="customer@example.com">
+            </div>
+            <div class="form-group">
+                <label>First Name</label>
+                <input type="text" id="firstName" value="John" placeholder="John">
+            </div>
+            <div class="form-group">
+                <label>Last Name</label>
+                <input type="text" id="lastName" value="Doe" placeholder="Doe">
+            </div>
+            <div class="form-group">
+                <label>Shopify Customer ID</label>
+                <input type="text" id="shopifyId" value="cust_demo_123" placeholder="cust_xxx">
+            </div>
+            <button onclick="startSession()">
+                Start Session →
+            </button>
+        </div>
+    </div>
+
+    <div id="chatSection" class="main-container hidden">
+        <div class="chat-panel">
+            <div class="chat-messages" id="chatMessages">
+                <!-- Messages will be added here -->
+            </div>
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <textarea id="messageInput" placeholder="Type your message..." rows="2"
+                        onkeydown="handleKeyDown(event)"></textarea>
+                </div>
+                <button id="sendBtn" onclick="sendMessage()">
+                    Send
+                </button>
+            </div>
+        </div>
+        <div class="trace-panel">
+            <div class="trace-header">Trace Events</div>
+            <div class="trace-content" id="traceContent">
+                <!-- Trace events will be added here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let sessionId = null;
+        let sessionStatus = 'active';
+
+        async function startSession() {
+            const email = document.getElementById('customerEmail').value;
+            const firstName = document.getElementById('firstName').value;
+            const lastName = document.getElementById('lastName').value;
+            const shopifyId = document.getElementById('shopifyId').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/session/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        customer_email: email,
+                        first_name: firstName,
+                        last_name: lastName,
+                        shopify_customer_id: shopifyId
+                    })
+                });
+
+                const data = await response.json();
+                sessionId = data.session_id;
+
+                document.getElementById('startSection').classList.add('hidden');
+                document.getElementById('chatSection').classList.remove('hidden');
+                updateStatus('active');
+
+                addSystemMessage(`Session started. ID: ${sessionId.slice(0, 8)}...`);
+                addSystemMessage(`Welcome ${firstName}! How can I help you today?`);
+
+            } catch (error) {
+                alert('Failed to start session. Is the server running?');
+                console.error(error);
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (!message || !sessionId) return;
+
+            input.value = '';
+            addMessage(message, 'customer');
+
+            const sendBtn = document.getElementById('sendBtn');
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<span class="loading"></span>';
+
+            try {
+                const response = await fetch(`${API_BASE}/session/${sessionId}/message`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+
+                const data = await response.json();
+
+                addMessage(data.reply, 'agent');
+
+                if (data.status === 'escalated') {
+                    updateStatus('escalated');
+                    addSystemMessage('⚠️ Session escalated to human support');
+                }
+
+                // Fetch and display trace
+                await fetchTrace();
+
+            } catch (error) {
+                addMessage('Sorry, there was an error processing your request.', 'agent');
+                console.error(error);
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = 'Send';
+            }
+        }
+
+        async function fetchTrace() {
+            try {
+                const response = await fetch(`${API_BASE}/session/${sessionId}/trace`);
+                const data = await response.json();
+
+                const traceContent = document.getElementById('traceContent');
+                traceContent.innerHTML = '';
+
+                data.events.forEach(event => {
+                    const eventDiv = document.createElement('div');
+                    let eventClass = '';
+
+                    if (event.event_type.includes('triage')) eventClass = 'triage';
+                    else if (event.event_type.includes('workflow')) eventClass = 'workflow';
+                    else if (event.event_type.includes('tool')) eventClass = 'tool';
+                    else if (event.event_type.includes('response')) eventClass = 'response';
+                    else if (event.event_type.includes('escalation')) eventClass = 'escalation';
+
+                    eventDiv.className = `trace-event ${eventClass}`;
+                    eventDiv.innerHTML = `
+                        <div class="trace-event-type">${event.event_type}</div>
+                        <div class="trace-event-data">${JSON.stringify(event.data, null, 2)}</div>
+                    `;
+                    traceContent.appendChild(eventDiv);
+                });
+
+                traceContent.scrollTop = traceContent.scrollHeight;
+
+            } catch (error) {
+                console.error('Failed to fetch trace:', error);
+            }
+        }
+
+        function addMessage(content, type) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+
+            const time = new Date().toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            messageDiv.innerHTML = `
+                <div class="message-content">${escapeHtml(content)}</div>
+                <div class="message-meta">${time}</div>
+            `;
+
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addSystemMessage(content) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message system';
+            messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+            messagesDiv.appendChild(messageDiv);
+        }
+
+        function updateStatus(status) {
+            const badge = document.getElementById('statusBadge');
+            sessionStatus = status;
+
+            if (status === 'active') {
+                badge.textContent = '🟢 Active';
+                badge.className = 'status-badge connected';
+            } else if (status === 'escalated') {
+                badge.textContent = '🟠 Escalated';
+                badge.className = 'status-badge escalated';
+            }
+        }
+
+        function handleKeyDown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+
+</html>

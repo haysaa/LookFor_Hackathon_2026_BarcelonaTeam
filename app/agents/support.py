@@ -129,6 +129,19 @@ WORKFLOW DECISION:
             else:
                 prompt += f"\nTOOL RESULT (Failed):\nError: {tool_results.get('error', 'Unknown error')}\n"
         
+        # RAG - Similar Tickets
+        try:
+            from app.tickets import ticket_store
+            last_msg = session.messages[-1].content if session.messages else ""
+            if last_msg:
+                similar_tickets = ticket_store.search_similar(last_msg, limit=2)
+                if similar_tickets:
+                    prompt += "\nSIMILAR PAST TICKETS (For Context - Do not mention directly):\n"
+                    for t in similar_tickets:
+                        prompt += f"- Subject: {t.subject}\n  Content: {t.conversation[:200]}...\n"
+        except ImportError:
+            pass  # Ticket store might not be ready
+        
         prompt += "\nWrite the email response based on the above context."
         
         return prompt
