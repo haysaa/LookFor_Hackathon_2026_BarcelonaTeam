@@ -1,0 +1,224 @@
+{
+    "workflow_name": "REFUND_STANDARD",
+    "version": "1.0",
+    "description": "Standard refund request handler - routes to appropriate workflow based on reason",
+    "required_fields": [
+        "order_id"
+    ],
+    "optional_fields": [
+        "refund_reason"
+    ],
+    "tools_available": [
+        "check_order_status",
+        "process_refund",
+        "issue_store_credit"
+    ],
+    "rules": [
+        {
+            "id": "refund_missing_order_id",
+            "condition": {
+                "field": "order_id",
+                "operator": "is_null"
+            },
+            "action": "ask_clarifying",
+            "policy_applied": "require_order_id",
+            "response": {
+                "clarifying_questions": [
+                    "I'd be happy to help with your refund request. Could you please provide your order number?"
+                ]
+            }
+        },
+        {
+            "id": "refund_missing_reason",
+            "condition": {
+                "all": [
+                    {
+                        "field": "order_id",
+                        "operator": "is_not_null"
+                    },
+                    {
+                        "field": "refund_reason",
+                        "operator": "is_null"
+                    }
+                ]
+            },
+            "action": "ask_clarifying",
+            "policy_applied": "require_refund_reason",
+            "response": {
+                "clarifying_questions": [
+                    "Could you please tell me the reason for your refund request?",
+                    "For example: shipping delay, wrong/missing item, changed mind, product issue, etc."
+                ]
+            }
+        },
+        {
+            "id": "refund_shipping_delay_route",
+            "condition": {
+                "field": "refund_reason",
+                "operator": "in",
+                "value": [
+                    "shipping_delay",
+                    "late_delivery",
+                    "delayed",
+                    "not_arrived",
+                    "waiting"
+                ]
+            },
+            "action": "route_to_workflow",
+            "target_workflow": "WISMO",
+            "policy_applied": "shipping_delay_uses_wismo_rules",
+            "note": "Shipping delay refund requests are handled by WISMO workflow first"
+        },
+        {
+            "id": "refund_wrong_missing_route",
+            "condition": {
+                "field": "refund_reason",
+                "operator": "in",
+                "value": [
+                    "wrong_item",
+                    "missing_item",
+                    "wrong",
+                    "missing",
+                    "damaged",
+                    "defective"
+                ]
+            },
+            "action": "route_to_workflow",
+            "target_workflow": "WRONG_MISSING",
+            "policy_applied": "wrong_missing_uses_dedicated_workflow",
+            "note": "Wrong/missing item refunds are handled by dedicated workflow"
+        },
+        {
+            "id": "refund_offer_store_credit",
+            "condition": {
+                "all": [
+                    {
+                        "field": "refund_reason",
+                        "operator": "in",
+                        "value": [
+                            "changed_mind",
+                            "no_longer_needed",
+                            "found_elsewhere",
+                            "other"
+                        ]
+                    },
+                    {
+                        "field": "store_credit_offered",
+                        "operator": "is_null"
+                    }
+                ]
+            },
+            "action": "respond",
+            "policy_applied": "offer_store_credit_first",
+            "response_template": "I understand you'd like a refund. We can offer you store credit with an extra 10% bonus, which you can use on any future purchase. Would you prefer that, or would you like a refund to your original payment method?",
+            "set_context": {
+                "store_credit_offered": true
+            }
+        },
+        {
+            "id": "refund_customer_accepts_credit",
+            "condition": {
+                "all": [
+                    {
+                        "field": "store_credit_offered",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "customer_preference",
+                        "operator": "equals",
+                        "value": "store_credit"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "store_credit_with_bonus",
+            "tool_plan": [
+                {
+                    "tool_name": "issue_store_credit",
+                    "params_source": {
+                        "customer_id": "context.customer_id",
+                        "amount": "context.order_total",
+                        "bonus_percent": 10,
+                        "reason": "Standard refund - customer chose store credit option"
+                    }
+                }
+            ],
+            "response_template": "Great! We've issued store credit for the full value of your order plus a 10% bonus. You can start using it immediately."
+        },
+        {
+            "id": "refund_process_cash",
+            "condition": {
+                "all": [
+                    {
+                        "field": "store_credit_offered",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "customer_preference",
+                        "operator": "equals",
+                        "value": "refund"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "standard_refund",
+            "tool_plan": [
+                {
+                    "tool_name": "process_refund",
+                    "params_source": {
+                        "order_id": "context.order_id",
+                        "reason": "Standard refund request by customer"
+                    }
+                }
+            ],
+            "response_template": "We've processed your refund. The amount will be credited to your original payment method within 5-7 business days."
+        },
+        {
+            "id": "refund_unclear_reason",
+            "condition": {
+                "all": [
+                    {
+                        "field": "refund_reason",
+                        "operator": "is_not_null"
+                    },
+                    {
+                        "field": "refund_reason",
+                        "operator": "not_in",
+                        "value": [
+                            "shipping_delay",
+                            "late_delivery",
+                            "delayed",
+                            "not_arrived",
+                            "waiting",
+                            "wrong_item",
+                            "missing_item",
+                            "wrong",
+                            "missing",
+                            "damaged",
+                            "defective",
+                            "changed_mind",
+                            "no_longer_needed",
+                            "found_elsewhere",
+                            "other"
+                        ]
+                    }
+                ]
+            },
+            "action": "ask_clarifying",
+            "policy_applied": "unclear_reason_clarification",
+            "response": {
+                "clarifying_questions": [
+                    "Could you provide more details about your refund request?",
+                    "Is it related to: shipping issues, receiving a wrong or missing item, or another reason?"
+                ]
+            }
+        }
+    ],
+    "default_action": {
+        "action": "escalate",
+        "policy_applied": "outside_standard_policy",
+        "escalation_reason": "Refund request outside standard policy - requires human review"
+    }
+}

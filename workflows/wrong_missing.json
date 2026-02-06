@@ -1,0 +1,168 @@
+{
+    "workflow_name": "WRONG_MISSING",
+    "version": "1.0",
+    "description": "Handles wrong or missing item complaints with evidence-based resolution",
+    "required_fields": [
+        "order_id"
+    ],
+    "optional_fields": [
+        "item_name"
+    ],
+    "evidence_fields": [
+        "item_photo",
+        "packing_slip",
+        "shipping_label"
+    ],
+    "tools_available": [
+        "check_order_status",
+        "issue_store_credit",
+        "process_refund",
+        "request_reship"
+    ],
+    "priority_order": [
+        "reship",
+        "store_credit",
+        "cash_refund"
+    ],
+    "rules": [
+        {
+            "id": "wrong_missing_no_order",
+            "condition": {
+                "field": "order_id",
+                "operator": "is_null"
+            },
+            "action": "ask_clarifying",
+            "policy_applied": "require_order_id",
+            "response": {
+                "clarifying_questions": [
+                    "I'm sorry to hear about the issue with your order. Can you please provide your order number?"
+                ]
+            }
+        },
+        {
+            "id": "wrong_missing_evidence_incomplete",
+            "condition": {
+                "any": [
+                    {
+                        "field": "evidence.item_photo",
+                        "operator": "equals",
+                        "value": false
+                    },
+                    {
+                        "field": "evidence.packing_slip",
+                        "operator": "equals",
+                        "value": false
+                    },
+                    {
+                        "field": "evidence.shipping_label",
+                        "operator": "equals",
+                        "value": false
+                    }
+                ]
+            },
+            "action": "ask_clarifying",
+            "policy_applied": "evidence_requirement",
+            "required_fields_missing": [
+                "item_photo",
+                "packing_slip",
+                "shipping_label"
+            ],
+            "response": {
+                "clarifying_questions": [
+                    "To help resolve this quickly, could you please provide:",
+                    "1. A photo of the item you received (if wrong item) or the package contents (if missing)",
+                    "2. A photo of the packing slip that came with your order",
+                    "3. A photo of the shipping label on the package"
+                ],
+                "note": "This helps us verify the issue and process your claim faster."
+            }
+        },
+        {
+            "id": "wrong_missing_reship_request",
+            "condition": {
+                "all": [
+                    {
+                        "field": "evidence_complete",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "customer_preference",
+                        "operator": "is_null_or",
+                        "value": "reship"
+                    }
+                ]
+            },
+            "action": "escalate",
+            "policy_applied": "reship_priority",
+            "escalation_reason": "Reship request requires manual approval - customer has provided all evidence",
+            "priority": "medium",
+            "note": "Reship is the fastest resolution for customer but requires human approval"
+        },
+        {
+            "id": "wrong_missing_store_credit",
+            "condition": {
+                "all": [
+                    {
+                        "field": "evidence_complete",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "customer_preference",
+                        "operator": "equals",
+                        "value": "store_credit"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "store_credit_10_percent_bonus",
+            "tool_plan": [
+                {
+                    "tool_name": "issue_store_credit",
+                    "params_source": {
+                        "customer_id": "context.customer_id",
+                        "amount": "context.order_total",
+                        "bonus_percent": 10,
+                        "reason": "Wrong/missing item resolution - store credit with 10% bonus"
+                    }
+                }
+            ],
+            "response_template": "We've issued store credit for the full value of your order plus a 10% bonus for the inconvenience. The credit is available immediately in your account."
+        },
+        {
+            "id": "wrong_missing_cash_refund",
+            "condition": {
+                "all": [
+                    {
+                        "field": "evidence_complete",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "customer_preference",
+                        "operator": "equals",
+                        "value": "refund"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "cash_refund_last_resort",
+            "tool_plan": [
+                {
+                    "tool_name": "process_refund",
+                    "params_source": {
+                        "order_id": "context.order_id",
+                        "reason": "Wrong/missing item - customer requested cash refund"
+                    }
+                }
+            ],
+            "response_template": "We've processed a full refund for your order. Please allow 5-7 business days for the refund to appear in your account."
+        }
+    ],
+    "default_action": {
+        "action": "escalate",
+        "policy_applied": "unhandled_wrong_missing_case",
+        "escalation_reason": "Wrong/missing item case requires human review"
+    }
+}
