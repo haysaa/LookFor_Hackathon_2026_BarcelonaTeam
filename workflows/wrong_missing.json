@@ -1,0 +1,79 @@
+{
+    "workflow_name": "WRONG_MISSING",
+    "version": "2.0",
+    "description": "Wrong or Missing Item workflow - handles incorrect/incomplete orders",
+    "rules": [
+        {
+            "id": "missing_order_id",
+            "condition": "not order_id",
+            "action": "ask_clarifying",
+            "required_fields_missing": [
+                "order_id"
+            ],
+            "policy_applied": "order_id_required"
+        },
+        {
+            "id": "evidence_missing",
+            "condition": "evidence_missing",
+            "action": "ask_clarifying",
+            "required_fields_missing": [
+                "item_photo",
+                "packing_slip",
+                "shipping_label"
+            ],
+            "policy_applied": "evidence_requirement",
+            "response_template": "Talebinizi işleme almak için lütfen şunları paylaşın:\n- Aldığınız ürünlerin fotoğrafı\n- Paket içindeki teslimat fişi\n- Kargo etiketinin fotoğrafı"
+        },
+        {
+            "id": "reship_escalation",
+            "condition": "evidence_complete",
+            "action": "escalate",
+            "policy_applied": "reship_priority",
+            "escalation_reason": "Reship request requires manual approval - evidence verified"
+        },
+        {
+            "id": "store_credit_option",
+            "condition": "customer_prefers_credit",
+            "action": "call_tool",
+            "tool_name": "shopify_create_store_credit",
+            "tool_params": {
+                "customer_id": "{customer_id}",
+                "amount": "{order_total}",
+                "reason": "Wrong/Missing item compensation + 10% bonus"
+            },
+            "policy_applied": "store_credit_10_percent_bonus",
+            "response_template": "Mağaza kredisi + %10 bonus olarak hesabınıza tanımlandı."
+        },
+        {
+            "id": "cash_refund_last_resort",
+            "condition": "all_alternatives_rejected",
+            "action": "call_tool",
+            "tool_name": "shopify_refund_order",
+            "tool_params": {
+                "order_id": "{order_id}",
+                "reason": "Wrong/Missing item - customer requested cash refund"
+            },
+            "policy_applied": "cash_refund_last_resort",
+            "response_template": "İade işleminiz başlatılmıştır. 5-7 iş günü içinde ödemeniz hesabınıza yansıyacaktır."
+        }
+    ],
+    "required_fields": [
+        "order_id",
+        "item_name"
+    ],
+    "evidence_fields": [
+        "item_photo",
+        "packing_slip",
+        "shipping_label"
+    ],
+    "tools_to_call": [
+        "shopify_get_order_details",
+        "shopify_get_product_details"
+    ],
+    "priority_order": [
+        "reship",
+        "store_credit",
+        "cash_refund"
+    ],
+    "priority": 2
+}

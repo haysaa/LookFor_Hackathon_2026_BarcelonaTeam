@@ -1,0 +1,74 @@
+{
+    "workflow_name": "REFUND_STANDARD",
+    "version": "2.0",
+    "description": "Standard Refund workflow - routes based on refund reason",
+    "rules": [
+        {
+            "id": "missing_order_id",
+            "condition": "not order_id",
+            "action": "ask_clarifying",
+            "required_fields_missing": [
+                "order_id"
+            ],
+            "policy_applied": "order_id_required"
+        },
+        {
+            "id": "missing_refund_reason",
+            "condition": "not refund_reason",
+            "action": "ask_clarifying",
+            "required_fields_missing": [
+                "refund_reason"
+            ],
+            "policy_applied": "refund_reason_required",
+            "response_template": "İade talebinizin nedenini belirtir misiniz? (kargo gecikmesi, yanlış ürün, diğer)"
+        },
+        {
+            "id": "route_to_wismo",
+            "condition": "refund_reason == 'shipping_delay'",
+            "action": "route_to_workflow",
+            "target_workflow": "WISMO",
+            "policy_applied": "shipping_delay_uses_wismo_rules"
+        },
+        {
+            "id": "route_to_wrong_missing",
+            "condition": "refund_reason == 'wrong_missing' or refund_reason == 'wrong_item' or refund_reason == 'missing_item'",
+            "action": "route_to_workflow",
+            "target_workflow": "WRONG_MISSING",
+            "policy_applied": "wrong_missing_uses_dedicated_workflow"
+        },
+        {
+            "id": "standard_refund_eligible",
+            "condition": "refund_reason == 'other' and within_policy",
+            "action": "call_tool",
+            "tool_name": "shopify_refund_order",
+            "tool_params": {
+                "order_id": "{order_id}",
+                "reason": "Standard refund - within policy"
+            },
+            "policy_applied": "standard_refund_eligibility",
+            "response_template": "İade talebiniz onaylanmıştır. 5-7 iş günü içinde ödemeniz hesabınıza yansıyacaktır."
+        },
+        {
+            "id": "outside_policy_escalation",
+            "condition": "outside_policy or not within_policy",
+            "action": "escalate",
+            "policy_applied": "policy_exception_escalation",
+            "escalation_reason": "Refund request outside standard policy - requires manager approval"
+        }
+    ],
+    "required_fields": [
+        "order_id",
+        "refund_reason"
+    ],
+    "tools_to_call": [
+        "shopify_get_order_details"
+    ],
+    "refund_reasons": [
+        "shipping_delay",
+        "wrong_missing",
+        "wrong_item",
+        "missing_item",
+        "other"
+    ],
+    "priority": 3
+}
