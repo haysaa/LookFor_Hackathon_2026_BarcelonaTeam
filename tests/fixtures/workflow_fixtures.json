@@ -1,0 +1,300 @@
+{
+    "description": "Test fixtures for all 3 workflow decision trees",
+    "version": "1.0",
+    "workflows": {
+        "WISMO": {
+            "description": "Where Is My Order workflow tests",
+            "fixtures": [
+                {
+                    "id": "wismo_missing_order",
+                    "description": "No order ID provided - should ask for clarification",
+                    "input": {
+                        "intent": "WISMO",
+                        "case_context": {
+                            "order_id": null
+                        }
+                    },
+                    "expected": {
+                        "action": "ask_clarifying",
+                        "policy_applied": "require_order_id",
+                        "has_clarifying_questions": true
+                    }
+                },
+                {
+                    "id": "wismo_monday_promise",
+                    "description": "Monday contact - should promise Friday delivery",
+                    "input": {
+                        "intent": "WISMO",
+                        "case_context": {
+                            "order_id": "12345",
+                            "shipping_status": "shipped",
+                            "contact_day": "Mon",
+                            "promise_given": null
+                        }
+                    },
+                    "expected": {
+                        "action": "respond",
+                        "policy_applied": "friday_promise",
+                        "response_contains": "Friday"
+                    }
+                },
+                {
+                    "id": "wismo_thursday_promise",
+                    "description": "Thursday contact - should promise early next week",
+                    "input": {
+                        "intent": "WISMO",
+                        "case_context": {
+                            "order_id": "12345",
+                            "shipping_status": "shipped",
+                            "contact_day": "Thu",
+                            "promise_given": null
+                        }
+                    },
+                    "expected": {
+                        "action": "respond",
+                        "policy_applied": "next_week_promise",
+                        "response_contains": "next week"
+                    }
+                },
+                {
+                    "id": "wismo_post_promise_escalation",
+                    "description": "Promise given but still not delivered - escalate",
+                    "input": {
+                        "intent": "WISMO",
+                        "case_context": {
+                            "order_id": "12345",
+                            "shipping_status": "in_transit",
+                            "contact_day": "Mon",
+                            "promise_given": "friday"
+                        }
+                    },
+                    "expected": {
+                        "action": "escalate",
+                        "policy_applied": "post_promise_escalation",
+                        "priority": "high"
+                    }
+                },
+                {
+                    "id": "wismo_already_delivered",
+                    "description": "Order already delivered - respond with confirmation",
+                    "input": {
+                        "intent": "WISMO",
+                        "case_context": {
+                            "order_id": "12345",
+                            "shipping_status": "delivered"
+                        }
+                    },
+                    "expected": {
+                        "action": "respond",
+                        "policy_applied": "order_delivered"
+                    }
+                }
+            ]
+        },
+        "WRONG_MISSING": {
+            "description": "Wrong or missing item workflow tests",
+            "fixtures": [
+                {
+                    "id": "wrong_missing_no_evidence",
+                    "description": "No evidence provided - ask for photos",
+                    "input": {
+                        "intent": "WRONG_MISSING",
+                        "case_context": {
+                            "order_id": "54321",
+                            "evidence_provided": {
+                                "item_photo": false,
+                                "packing_slip": false,
+                                "shipping_label": false
+                            }
+                        }
+                    },
+                    "expected": {
+                        "action": "ask_clarifying",
+                        "policy_applied": "evidence_requirement",
+                        "required_fields_missing": [
+                            "item_photo",
+                            "packing_slip",
+                            "shipping_label"
+                        ]
+                    }
+                },
+                {
+                    "id": "wrong_missing_evidence_complete_reship",
+                    "description": "Evidence complete, default to reship (escalation)",
+                    "input": {
+                        "intent": "WRONG_MISSING",
+                        "case_context": {
+                            "order_id": "54321",
+                            "evidence_complete": true,
+                            "customer_preference": null
+                        }
+                    },
+                    "expected": {
+                        "action": "escalate",
+                        "policy_applied": "reship_priority",
+                        "escalation_reason_contains": "Reship"
+                    }
+                },
+                {
+                    "id": "wrong_missing_store_credit",
+                    "description": "Customer prefers store credit",
+                    "input": {
+                        "intent": "WRONG_MISSING",
+                        "case_context": {
+                            "order_id": "54321",
+                            "evidence_complete": true,
+                            "customer_preference": "store_credit",
+                            "customer_id": "cust_123",
+                            "order_total": 50.00
+                        }
+                    },
+                    "expected": {
+                        "action": "call_tool",
+                        "policy_applied": "store_credit_10_percent_bonus",
+                        "tool_plan": [
+                            {
+                                "tool_name": "issue_store_credit"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "id": "wrong_missing_cash_refund",
+                    "description": "Customer insists on cash refund",
+                    "input": {
+                        "intent": "WRONG_MISSING",
+                        "case_context": {
+                            "order_id": "54321",
+                            "evidence_complete": true,
+                            "customer_preference": "refund"
+                        }
+                    },
+                    "expected": {
+                        "action": "call_tool",
+                        "policy_applied": "cash_refund_last_resort",
+                        "tool_plan": [
+                            {
+                                "tool_name": "process_refund"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        "REFUND_STANDARD": {
+            "description": "Standard refund workflow tests",
+            "fixtures": [
+                {
+                    "id": "refund_missing_reason",
+                    "description": "No reason provided - ask for clarification",
+                    "input": {
+                        "intent": "REFUND_STANDARD",
+                        "case_context": {
+                            "order_id": "12345",
+                            "refund_reason": null
+                        }
+                    },
+                    "expected": {
+                        "action": "ask_clarifying",
+                        "policy_applied": "require_refund_reason"
+                    }
+                },
+                {
+                    "id": "refund_shipping_delay_route",
+                    "description": "Shipping delay reason - route to WISMO",
+                    "input": {
+                        "intent": "REFUND_STANDARD",
+                        "case_context": {
+                            "order_id": "12345",
+                            "refund_reason": "shipping_delay"
+                        }
+                    },
+                    "expected": {
+                        "action": "route_to_workflow",
+                        "target_workflow": "WISMO",
+                        "policy_applied": "shipping_delay_uses_wismo_rules"
+                    }
+                },
+                {
+                    "id": "refund_wrong_item_route",
+                    "description": "Wrong item reason - route to WRONG_MISSING",
+                    "input": {
+                        "intent": "REFUND_STANDARD",
+                        "case_context": {
+                            "order_id": "12345",
+                            "refund_reason": "wrong_item"
+                        }
+                    },
+                    "expected": {
+                        "action": "route_to_workflow",
+                        "target_workflow": "WRONG_MISSING",
+                        "policy_applied": "wrong_missing_uses_dedicated_workflow"
+                    }
+                },
+                {
+                    "id": "refund_changed_mind_offer_credit",
+                    "description": "Changed mind - offer store credit first",
+                    "input": {
+                        "intent": "REFUND_STANDARD",
+                        "case_context": {
+                            "order_id": "12345",
+                            "refund_reason": "changed_mind",
+                            "store_credit_offered": null
+                        }
+                    },
+                    "expected": {
+                        "action": "respond",
+                        "policy_applied": "offer_store_credit_first",
+                        "response_contains": "store credit"
+                    }
+                },
+                {
+                    "id": "refund_accept_credit",
+                    "description": "Customer accepts store credit",
+                    "input": {
+                        "intent": "REFUND_STANDARD",
+                        "case_context": {
+                            "order_id": "12345",
+                            "refund_reason": "changed_mind",
+                            "store_credit_offered": true,
+                            "customer_preference": "store_credit",
+                            "customer_id": "cust_abc",
+                            "order_total": 75.00
+                        }
+                    },
+                    "expected": {
+                        "action": "call_tool",
+                        "policy_applied": "store_credit_with_bonus",
+                        "tool_plan": [
+                            {
+                                "tool_name": "issue_store_credit"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "id": "refund_insist_cash",
+                    "description": "Customer insists on cash refund",
+                    "input": {
+                        "intent": "REFUND_STANDARD",
+                        "case_context": {
+                            "order_id": "12345",
+                            "refund_reason": "changed_mind",
+                            "store_credit_offered": true,
+                            "customer_preference": "refund"
+                        }
+                    },
+                    "expected": {
+                        "action": "call_tool",
+                        "policy_applied": "standard_refund",
+                        "tool_plan": [
+                            {
+                                "tool_name": "process_refund"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+}

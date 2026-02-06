@@ -1,8 +1,8 @@
-# Lookfor Hackathon 2026 - Sprint Plan (2 Gün) - **UPDATED v2.0**
+# Lookfor Hackathon 2026 - Sprint Plan (2 Gün)
 
 **Takım**: 2 Developer (Dev A + Dev B)  
 **Platform**: OpenAI API (GPT-4o mini) + deterministic workflow engine  
-**Hedef**: WISMO, Refund, Wrong/Missing Item için çalışan multi-agent sistem
+**Hedef**: WISMO, Refund, Wrong/Missing Item için çalışan multi-agent email support sistemi
 
 ---
 
@@ -253,15 +253,26 @@ Tüm tool endpoint'leri HTTP 200 döner:
 **Süre**: 3.5 saat
 
 - [ ] **Prompt template sistemi** (45dk)
-  - Her agent için `prompts/` klasöründe `.txt` dosyaları
-  - Variables ile render sistemi (Jinja2 veya f-string)
+  - `prompts/` folder with `.txt` templates
+  - Jinja2 variable rendering
+  - Version numbers (v1.0)
   
 - [ ] **Triage Agent implementasyonu** (2.5 saat)
-  - OpenAI API (GPT-4o mini) çağrısı + structured JSON outputs
+  - OpenAI API (GPT-4o mini) + structured JSON outputs
+  - Intent classification: WISMO / REFUND_STANDARD / WRONG_MISSING
   - Entity extraction: order_id, tracking_number, item_name
-  - Output: `TriageResult` JSON schema
+  - Output: `TriageResult` schema
+  - Auto-flag `needs_human=true` if confidence < 0.6
 
-**⚠️ Test Gate**: 6 örnek mesajı intent testi
+**Çıktı**: Triage Agent mesajları doğru sınıflandırıyor
+
+**⚠️ Test Gate**: 
+- [ ] 6 sample messages intent test
+- [ ] Entity extraction test (order_id, etc.)
+
+---
+
+### Öğle Arası (13:00 - 14:00)
 
 ---
 

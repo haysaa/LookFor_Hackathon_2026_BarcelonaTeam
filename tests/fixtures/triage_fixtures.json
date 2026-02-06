@@ -1,0 +1,91 @@
+{
+    "description": "Test fixtures for Triage Agent - 6 intent classification tests",
+    "version": "1.0",
+    "fixtures": [
+        {
+            "id": "triage_wismo_1",
+            "description": "Clear WISMO - order not arrived",
+            "input": {
+                "message": "Siparişim gelmedi, 4 gündür bekliyorum",
+                "context": null
+            },
+            "expected": {
+                "intent": "WISMO",
+                "confidence_min": 0.8,
+                "needs_human": false
+            }
+        },
+        {
+            "id": "triage_wismo_2",
+            "description": "WISMO with order ID",
+            "input": {
+                "message": "Where is my order #12345? It was supposed to arrive yesterday.",
+                "context": "VIP customer"
+            },
+            "expected": {
+                "intent": "WISMO",
+                "confidence_min": 0.85,
+                "entities": {
+                    "order_id": "#12345"
+                },
+                "needs_human": false
+            }
+        },
+        {
+            "id": "triage_refund_1",
+            "description": "Clear refund request",
+            "input": {
+                "message": "I want a refund for my purchase",
+                "context": null
+            },
+            "expected": {
+                "intent": "REFUND_STANDARD",
+                "confidence_min": 0.8,
+                "needs_human": false
+            }
+        },
+        {
+            "id": "triage_refund_2",
+            "description": "Refund due to shipping delay",
+            "input": {
+                "message": "Refund istiyorum, kargo çok geç geldi",
+                "context": null
+            },
+            "expected": {
+                "intent": "REFUND_STANDARD",
+                "confidence_min": 0.75,
+                "needs_human": false
+            }
+        },
+        {
+            "id": "triage_wrong_missing_1",
+            "description": "Missing item from parcel",
+            "input": {
+                "message": "Paketimden ürün eksik çıktı",
+                "context": null
+            },
+            "expected": {
+                "intent": "WRONG_MISSING",
+                "confidence_min": 0.8,
+                "needs_human": false
+            }
+        },
+        {
+            "id": "triage_wrong_missing_2",
+            "description": "Wrong item received",
+            "input": {
+                "message": "I ordered a blue shirt but received a red one. Order #54321",
+                "context": null
+            },
+            "expected": {
+                "intent": "WRONG_MISSING",
+                "confidence_min": 0.85,
+                "entities": {
+                    "order_id": "#54321",
+                    "item_name": "blue shirt"
+                },
+                "needs_human": false
+            }
+        }
+    ]
+}
