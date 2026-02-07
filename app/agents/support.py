@@ -138,7 +138,7 @@ WORKFLOW DECISION:
                 if similar_tickets:
                     prompt += "\nSIMILAR PAST TICKETS (For Context - Do not mention directly):\n"
                     for t in similar_tickets:
-                        prompt += f"- Subject: {t.subject}\n  Content: {t.conversation[:200]}...\n"
+                        prompt += f"- Subject: {t.subject}\n  Content: {t.raw_conversation[:200]}...\n"
         except ImportError:
             pass  # Ticket store might not be ready
         

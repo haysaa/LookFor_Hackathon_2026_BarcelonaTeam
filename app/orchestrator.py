@@ -186,6 +186,11 @@ class Orchestrator:
         session = session_store.get(session_id)
         decision = self.workflow_engine.evaluate(session)
         
+        # Apply set_context from decision
+        set_context = decision.get("set_context", {})
+        if set_context:
+            self._apply_context_updates(session_id, set_context)
+        
         TraceLogger.log_workflow_decision(
             session_id,
             workflow_id=decision.get("workflow_id", "unknown"),
@@ -196,6 +201,48 @@ class Orchestrator:
         )
         
         return decision
+    
+    def _apply_context_updates(self, session_id: str, set_context: dict):
+        """Apply context updates from workflow decision, including WISMO promise computation."""
+        from datetime import datetime
+        session = session_store.get(session_id)
+        if not session:
+            return
+        
+        cc = session.case_context
+        
+        for key, value in set_context.items():
+            if hasattr(cc, key):
+                setattr(cc, key, value)
+            else:
+                # Store in extra dict
+                cc.extra[key] = value
+        
+        # If setting WISMO promise, compute deadline and timestamp
+        if 'wismo_promise_type' in set_context and set_context['wismo_promise_type']:
+            try:
+                from app.wismo_helpers import get_contact_day, compute_promise_deadline
+                contact_day = cc.contact_day or get_contact_day(session)
+                cc.contact_day = contact_day
+                promise_type, deadline = compute_promise_deadline(contact_day)
+                cc.wismo_promise_type = promise_type
+                cc.wismo_promise_deadline = deadline
+                cc.wismo_promise_set_at = datetime.utcnow().isoformat()
+                
+                # Log the promise computation
+                TraceLogger.log_custom(
+                    session_id,
+                    event_type="wismo_promise_set",
+                    data={
+                        "contact_day": contact_day,
+                        "promise_type": promise_type,
+                        "promise_deadline": deadline
+                    }
+                )
+            except ImportError:
+                pass
+        
+        session_store.update(session)
     
     def _execute_decision(self, session_id: str, decision: dict) -> dict:
         """Execute the workflow decision through appropriate agents."""

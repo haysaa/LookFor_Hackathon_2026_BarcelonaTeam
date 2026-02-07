@@ -1,49 +1,109 @@
 {
     "workflow_name": "REFUND_STANDARD",
-    "version": "2.0",
-    "description": "Standard refund request handler - routes to appropriate workflow based on reason",
+    "version": "1.0",
+    "description": "Standard refund workflow with 4 branches based on refund reason",
     "required_fields": [
-        "order_id",
-        "refund_reason"
+        "order_id"
     ],
-    "optional_fields": [],
     "tools_available": [
-        "check_order_status",
+        "shopify_get_customer_orders",
+        "shopify_get_order_details",
+        "shopify_cancel_order",
+        "shopify_create_store_credit",
         "shopify_refund_order",
-        "shopify_create_store_credit"
-    ],
-    "priority": 3,
-    "refund_reasons": [
-        "shipping_delay",
-        "wrong_item",
-        "missing_item",
-        "changed_mind",
-        "no_longer_needed",
-        "other"
+        "shopify_add_tags"
     ],
     "rules": [
         {
-            "id": "refund_missing_order_id",
+            "id": "fetch_customer_orders",
             "condition": {
-                "field": "order_id",
-                "operator": "is_null"
+                "all": [
+                    {
+                        "field": "order_id",
+                        "operator": "is_null"
+                    },
+                    {
+                        "field": "orders_fetched",
+                        "operator": "not_equals",
+                        "value": true
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "fetch_customer_orders",
+            "tool_plan": [
+                {
+                    "tool_name": "shopify_get_customer_orders",
+                    "params_source": {
+                        "email": "context.customer_email",
+                        "after": "null",
+                        "limit": 10
+                    }
+                }
+            ],
+            "set_context": {
+                "orders_fetched": true
+            }
+        },
+        {
+            "id": "require_order_id",
+            "condition": {
+                "all": [
+                    {
+                        "field": "order_id",
+                        "operator": "is_null"
+                    },
+                    {
+                        "field": "orders_fetched",
+                        "operator": "equals",
+                        "value": true
+                    }
+                ]
             },
             "action": "ask_clarifying",
             "policy_applied": "require_order_id",
             "response": {
                 "clarifying_questions": [
-                    "I'd be happy to help with your refund request. Could you please provide your order number?",
-                    "İade talebinizde yardımcı olmak istiyorum. Lütfen sipariş numaranızı verir misiniz?"
+                    "I'd be happy to help with your refund request. Could you please provide your order number (e.g., #1234)?"
                 ]
             }
         },
         {
-            "id": "refund_missing_reason",
+            "id": "fetch_order_details",
             "condition": {
                 "all": [
                     {
                         "field": "order_id",
-                        "operator": "is_not_null"
+                        "operator": "not_null"
+                    },
+                    {
+                        "field": "order_status",
+                        "operator": "is_null"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "fetch_order_details",
+            "tool_plan": [
+                {
+                    "tool_name": "shopify_get_order_details",
+                    "params_source": {
+                        "orderId": "context.order_id"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "ask_refund_reason",
+            "condition": {
+                "all": [
+                    {
+                        "field": "order_id",
+                        "operator": "not_null"
+                    },
+                    {
+                        "field": "order_status",
+                        "operator": "not_null"
                     },
                     {
                         "field": "refund_reason",
@@ -52,189 +112,687 @@
                 ]
             },
             "action": "ask_clarifying",
-            "policy_applied": "require_refund_reason",
+            "policy_applied": "collect_refund_reason",
             "response": {
                 "clarifying_questions": [
-                    "Could you please tell me the reason for your refund request? For example: shipping delay, wrong/missing item, changed mind, etc.",
-                    "İade talebinizin nedenini belirtir misiniz? (kargo gecikmesi, yanlış ürün, eksik ürün, fikrimi değiştirdim, diğer)"
+                    "I understand you'd like a refund. To help you best, could you please tell me which of these describes your situation?\n\n1. Product didn't meet expectations\n2. Shipping delay\n3. Damaged or wrong item\n4. Changed my mind"
                 ]
             }
         },
         {
-            "id": "refund_shipping_delay_route",
+            "id": "expectations_ask_cause",
             "condition": {
-                "field": "refund_reason",
-                "operator": "in",
-                "value": [
-                    "shipping_delay",
-                    "late_delivery",
-                    "delayed",
-                    "not_arrived"
+                "all": [
+                    {
+                        "field": "order_status",
+                        "operator": "not_null"
+                    },
+                    {
+                        "field": "refund_reason",
+                        "operator": "equals",
+                        "value": "EXPECTATIONS"
+                    },
+                    {
+                        "field": "expectation_cause",
+                        "operator": "is_null"
+                    }
                 ]
             },
-            "action": "route_to_workflow",
-            "target_workflow": "WISMO",
-            "policy_applied": "shipping_delay_uses_wismo_rules",
-            "note": "Shipping delay refund requests are handled by WISMO workflow first"
-        },
-        {
-            "id": "refund_wrong_missing_route",
-            "condition": {
-                "field": "refund_reason",
-                "operator": "in",
-                "value": [
-                    "wrong_item",
-                    "missing_item",
-                    "wrong",
-                    "missing",
-                    "damaged",
-                    "defective"
+            "action": "ask_clarifying",
+            "policy_applied": "expectations_identify_cause",
+            "response": {
+                "clarifying_questions": [
+                    "I'm sorry the product didn't meet your expectations. To help you better, which of these best describes your experience?\n\n• Trouble falling asleep\n• Trouble staying asleep\n• Comfort issues\n• Taste concerns\n• No noticeable effect"
                 ]
-            },
-            "action": "route_to_workflow",
-            "target_workflow": "WRONG_MISSING",
-            "policy_applied": "wrong_missing_uses_dedicated_workflow",
-            "note": "Wrong/missing item refunds are handled by dedicated workflow"
+            }
         },
         {
-            "id": "refund_offer_store_credit",
+            "id": "expectations_send_tip",
             "condition": {
                 "all": [
                     {
                         "field": "refund_reason",
-                        "operator": "in",
-                        "value": [
-                            "changed_mind",
-                            "no_longer_needed",
-                            "found_elsewhere",
-                            "other"
-                        ]
+                        "operator": "equals",
+                        "value": "EXPECTATIONS"
                     },
                     {
-                        "field": "store_credit_offered",
-                        "operator": "is_null"
+                        "field": "expectation_cause",
+                        "operator": "not_null"
+                    },
+                    {
+                        "field": "usage_tip_sent",
+                        "operator": "not_equals",
+                        "value": true
                     }
                 ]
             },
             "action": "respond",
-            "policy_applied": "offer_store_credit_first",
-            "response_templates": {
-                "en": "I understand you'd like a refund. We can offer you store credit with an extra 10% bonus, which you can use on any future purchase. Would you prefer that, or would you like a refund to your original payment method?",
-                "tr": "İade talebinizi anladım. Size tam sipariş bedeli + %10 bonus ile store credit teklif edebiliriz. Bunu mu tercih edersiniz, yoksa orijinal ödeme yönteminize iade mi istiyorsunuz?"
-            },
+            "policy_applied": "expectations_usage_tip",
+            "response_template": "Thank you for sharing that. Here's a tip that might help:\n\n{{usage_tip}}\n\nWould you like to try these adjustments first, or would you prefer to explore other options?",
             "set_context": {
-                "store_credit_offered": true
+                "usage_tip_sent": true
             }
         },
         {
-            "id": "refund_customer_accepts_credit",
+            "id": "expectations_offer_swap",
             "condition": {
                 "all": [
                     {
-                        "field": "store_credit_offered",
+                        "field": "refund_reason",
+                        "operator": "equals",
+                        "value": "EXPECTATIONS"
+                    },
+                    {
+                        "field": "usage_tip_sent",
                         "operator": "equals",
                         "value": true
                     },
                     {
-                        "field": "customer_preference",
+                        "field": "swap_offered",
+                        "operator": "not_equals",
+                        "value": true
+                    }
+                ]
+            },
+            "action": "respond",
+            "policy_applied": "expectations_offer_swap",
+            "response_template": "If the product isn't quite right for you, we'd love to offer you a swap to a different product that might be a better fit. This is often the best option as you can try something new at no extra cost.\n\nWould you like to explore a product swap?",
+            "set_context": {
+                "swap_offered": true
+            }
+        },
+        {
+            "id": "expectations_accept_swap",
+            "condition": {
+                "all": [
+                    {
+                        "field": "refund_reason",
                         "operator": "equals",
-                        "value": "store_credit"
+                        "value": "EXPECTATIONS"
+                    },
+                    {
+                        "field": "swap_offered",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "customer_resolution_choice",
+                        "operator": "equals",
+                        "value": "SWAP"
+                    }
+                ]
+            },
+            "action": "escalate",
+            "policy_applied": "expectations_swap_escalate",
+            "escalation_reason": "Customer accepted product swap - requires manual processing",
+            "priority": "medium",
+            "add_tags": [
+                "Refund, Product Swap Requested"
+            ],
+            "lock_session": true
+        },
+        {
+            "id": "expectations_offer_store_credit",
+            "condition": {
+                "all": [
+                    {
+                        "field": "refund_reason",
+                        "operator": "equals",
+                        "value": "EXPECTATIONS"
+                    },
+                    {
+                        "field": "swap_offered",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "customer_resolution_choice",
+                        "operator": "in",
+                        "value": [
+                            "REFUND",
+                            null
+                        ]
+                    },
+                    {
+                        "field": "refund_store_credit_offered",
+                        "operator": "not_equals",
+                        "value": true
+                    }
+                ]
+            },
+            "action": "respond",
+            "policy_applied": "expectations_offer_store_credit",
+            "response_template": "No problem! Before we process a cash refund, I wanted to let you know we can offer you store credit for the full amount plus a 10% bonus. The credit never expires and can be used on any products.\n\nWould you prefer store credit with the bonus, or a cash refund to your original payment method?",
+            "set_context": {
+                "refund_store_credit_offered": true
+            }
+        },
+        {
+            "id": "expectations_accept_store_credit",
+            "condition": {
+                "all": [
+                    {
+                        "field": "refund_reason",
+                        "operator": "equals",
+                        "value": "EXPECTATIONS"
+                    },
+                    {
+                        "field": "refund_store_credit_offered",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "customer_resolution_choice",
+                        "operator": "equals",
+                        "value": "STORE_CREDIT"
                     }
                 ]
             },
             "action": "call_tool",
-            "policy_applied": "store_credit_with_bonus",
+            "policy_applied": "expectations_issue_store_credit",
             "tool_plan": [
                 {
                     "tool_name": "shopify_create_store_credit",
                     "params_source": {
-                        "customer_id": "context.customer_id",
-                        "amount": "context.order_total",
-                        "bonus_percent": 10,
-                        "reason": "Standard refund - customer chose store credit option"
+                        "id": "context.customer_id",
+                        "creditAmount": {
+                            "amount": "context.order_total_with_bonus",
+                            "currencyCode": "USD"
+                        },
+                        "expiresAt": null
+                    }
+                },
+                {
+                    "tool_name": "shopify_add_tags",
+                    "params_source": {
+                        "id": "context.order_id",
+                        "tags": [
+                            "Refund, Store Credit Issued"
+                        ]
                     }
                 }
             ],
-            "response_templates": {
-                "en": "Great! We've issued store credit for the full value of your order plus a 10% bonus. You can start using it immediately.",
-                "tr": "Harika! Siparişinizin tam bedeli + %10 bonus ile store credit vermiş bulunuyoruz. Hemen kullanmaya başlayabilirsiniz."
-            }
+            "response_template": "Done! I've issued store credit for the full amount plus a 10% bonus. The credit is available in your account immediately."
         },
         {
-            "id": "refund_process_cash",
+            "id": "expectations_cash_refund",
             "condition": {
                 "all": [
                     {
-                        "field": "store_credit_offered",
+                        "field": "refund_reason",
+                        "operator": "equals",
+                        "value": "EXPECTATIONS"
+                    },
+                    {
+                        "field": "refund_store_credit_offered",
                         "operator": "equals",
                         "value": true
                     },
                     {
-                        "field": "customer_preference",
+                        "field": "customer_resolution_choice",
                         "operator": "equals",
-                        "value": "refund"
+                        "value": "REFUND"
                     }
                 ]
             },
             "action": "call_tool",
-            "policy_applied": "standard_refund",
+            "policy_applied": "expectations_cash_refund",
             "tool_plan": [
                 {
                     "tool_name": "shopify_refund_order",
                     "params_source": {
-                        "order_id": "context.order_id",
-                        "reason": "Standard refund request by customer"
+                        "orderId": "context.order_gid",
+                        "refundMethod": "ORIGINAL_PAYMENT_METHODS"
+                    }
+                },
+                {
+                    "tool_name": "shopify_add_tags",
+                    "params_source": {
+                        "id": "context.order_id",
+                        "tags": [
+                            "Refund, Cash Refund Issued"
+                        ]
                     }
                 }
             ],
-            "response_templates": {
-                "en": "We've processed your refund. The amount will be credited to your original payment method within 5-7 business days.",
-                "tr": "İade talebiniz işleme alınmıştır. Tutar 5-7 iş günü içinde orijinal ödeme yönteminize yansıyacaktır."
-            }
+            "response_template": "I've processed your refund to the original payment method. You should see it within 5-7 business days.\n\nIs there anything else I can help you with?"
         },
         {
-            "id": "refund_unclear_reason",
+            "id": "shipping_delay_ask_wait_mon_tue",
             "condition": {
                 "all": [
                     {
                         "field": "refund_reason",
-                        "operator": "is_not_null"
+                        "operator": "equals",
+                        "value": "SHIPPING_DELAY"
                     },
                     {
-                        "field": "refund_reason",
-                        "operator": "not_in",
+                        "field": "order_status",
+                        "operator": "not_null"
+                    },
+                    {
+                        "field": "contact_day",
+                        "operator": "in",
                         "value": [
-                            "shipping_delay",
-                            "late_delivery",
-                            "delayed",
-                            "not_arrived",
-                            "wrong_item",
-                            "missing_item",
-                            "wrong",
-                            "missing",
-                            "damaged",
-                            "defective",
-                            "changed_mind",
-                            "no_longer_needed",
-                            "found_elsewhere",
-                            "other"
+                            "Mon",
+                            "Tue"
                         ]
+                    },
+                    {
+                        "field": "refund_shipping_wait_asked",
+                        "operator": "not_equals",
+                        "value": true
                     }
                 ]
             },
-            "action": "ask_clarifying",
-            "policy_applied": "unclear_reason_clarification",
-            "response": {
-                "clarifying_questions": [
-                    "Could you provide more details about your refund request? Is it related to: shipping issues, receiving a wrong or missing item, or another reason?",
-                    "İade talebiniz hakkında daha fazla bilgi verebilir misiniz? Kargo sorunu, yanlış/eksik ürün mi, yoksa başka bir neden mi?"
-                ]
+            "action": "respond",
+            "policy_applied": "shipping_delay_friday_promise",
+            "response_template": "I completely understand the frustration with shipping delays. Your order should arrive by Friday. If it doesn't arrive by then, we'll send a free replacement right away.\n\nAre you okay waiting until Friday?",
+            "set_context": {
+                "refund_shipping_wait_asked": true,
+                "refund_shipping_promise_type": "FRIDAY"
             }
+        },
+        {
+            "id": "shipping_delay_ask_wait_wed_fri",
+            "condition": {
+                "all": [
+                    {
+                        "field": "refund_reason",
+                        "operator": "equals",
+                        "value": "SHIPPING_DELAY"
+                    },
+                    {
+                        "field": "order_status",
+                        "operator": "not_null"
+                    },
+                    {
+                        "field": "contact_day",
+                        "operator": "in",
+                        "value": [
+                            "Wed",
+                            "Thu",
+                            "Fri",
+                            "Sat",
+                            "Sun"
+                        ]
+                    },
+                    {
+                        "field": "refund_shipping_wait_asked",
+                        "operator": "not_equals",
+                        "value": true
+                    }
+                ]
+            },
+            "action": "respond",
+            "policy_applied": "shipping_delay_next_week_promise",
+            "response_template": "I completely understand the frustration with shipping delays. Your order should arrive by early next week (Monday). If it doesn't arrive by then, we'll send a free replacement right away.\n\nAre you okay waiting until early next week?",
+            "set_context": {
+                "refund_shipping_wait_asked": true,
+                "refund_shipping_promise_type": "EARLY_NEXT_WEEK"
+            }
+        },
+        {
+            "id": "shipping_delay_customer_accepts",
+            "condition": {
+                "all": [
+                    {
+                        "field": "refund_reason",
+                        "operator": "equals",
+                        "value": "SHIPPING_DELAY"
+                    },
+                    {
+                        "field": "refund_shipping_wait_asked",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "customer_wait_acceptance",
+                        "operator": "equals",
+                        "value": "ACCEPTED"
+                    }
+                ]
+            },
+            "action": "respond",
+            "policy_applied": "shipping_delay_wait_accepted",
+            "response_template": "Thank you for your patience! I've noted this on your account. If your order doesn't arrive by {{refund_shipping_promise_deadline}}, please reach out and we'll get a replacement sent immediately.\n\nIs there anything else I can help you with?"
+        },
+        {
+            "id": "shipping_delay_customer_declines",
+            "condition": {
+                "all": [
+                    {
+                        "field": "refund_reason",
+                        "operator": "equals",
+                        "value": "SHIPPING_DELAY"
+                    },
+                    {
+                        "field": "refund_shipping_wait_asked",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "customer_wait_acceptance",
+                        "operator": "equals",
+                        "value": "DECLINED"
+                    }
+                ]
+            },
+            "action": "escalate",
+            "policy_applied": "shipping_delay_escalate",
+            "escalation_reason": "Customer refused to wait for shipping delay - immediate resolution needed",
+            "priority": "high",
+            "add_tags": [
+                "Refund, Escalated Shipping Delay"
+            ],
+            "lock_session": true,
+            "response_template": "Hey, I'm looping Monica, who is our Head of CS, she'll take it from there."
+        },
+        {
+            "id": "shipping_delay_promise_passed",
+            "condition": {
+                "all": [
+                    {
+                        "field": "refund_reason",
+                        "operator": "equals",
+                        "value": "SHIPPING_DELAY"
+                    },
+                    {
+                        "field": "customer_wait_acceptance",
+                        "operator": "equals",
+                        "value": "ACCEPTED"
+                    },
+                    {
+                        "field": "refund_shipping_promise_passed",
+                        "operator": "equals",
+                        "value": true
+                    }
+                ]
+            },
+            "action": "escalate",
+            "policy_applied": "shipping_delay_promise_failed",
+            "escalation_reason": "Shipping promise deadline passed - customer needs replacement",
+            "priority": "high",
+            "add_tags": [
+                "Refund, Promise Failed - Replacement Needed"
+            ],
+            "lock_session": true
+        },
+        {
+            "id": "damaged_wrong_offer_options",
+            "condition": {
+                "all": [
+                    {
+                        "field": "refund_reason",
+                        "operator": "equals",
+                        "value": "DAMAGED_OR_WRONG"
+                    },
+                    {
+                        "field": "order_status",
+                        "operator": "not_null"
+                    },
+                    {
+                        "field": "replacement_offered",
+                        "operator": "not_equals",
+                        "value": true
+                    }
+                ]
+            },
+            "action": "respond",
+            "policy_applied": "damaged_wrong_offer_options",
+            "response_template": "I'm so sorry to hear about the issue with your order. We can make this right!\n\nWould you prefer:\n1. A free replacement shipped right away\n2. Store credit with a 10% bonus for the inconvenience",
+            "set_context": {
+                "replacement_offered": true
+            }
+        },
+        {
+            "id": "damaged_wrong_replacement",
+            "condition": {
+                "all": [
+                    {
+                        "field": "refund_reason",
+                        "operator": "equals",
+                        "value": "DAMAGED_OR_WRONG"
+                    },
+                    {
+                        "field": "replacement_offered",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "customer_resolution_choice",
+                        "operator": "equals",
+                        "value": "REPLACEMENT"
+                    }
+                ]
+            },
+            "action": "escalate",
+            "policy_applied": "damaged_wrong_replacement_escalate",
+            "escalation_reason": "Customer chose replacement for damaged/wrong item - manual processing needed",
+            "priority": "medium",
+            "add_tags": [
+                "Refund, Escalated Replacement Review"
+            ],
+            "lock_session": true,
+            "response_template": "I've escalated this to our team for immediate processing. Someone will reach out shortly to confirm the replacement details."
+        },
+        {
+            "id": "damaged_wrong_store_credit",
+            "condition": {
+                "all": [
+                    {
+                        "field": "refund_reason",
+                        "operator": "equals",
+                        "value": "DAMAGED_OR_WRONG"
+                    },
+                    {
+                        "field": "replacement_offered",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "customer_resolution_choice",
+                        "operator": "equals",
+                        "value": "STORE_CREDIT"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "damaged_wrong_issue_store_credit",
+            "tool_plan": [
+                {
+                    "tool_name": "shopify_create_store_credit",
+                    "params_source": {
+                        "id": "context.customer_id",
+                        "creditAmount": {
+                            "amount": "context.order_total_with_bonus",
+                            "currencyCode": "USD"
+                        },
+                        "expiresAt": null
+                    }
+                },
+                {
+                    "tool_name": "shopify_add_tags",
+                    "params_source": {
+                        "id": "context.order_id",
+                        "tags": [
+                            "Wrong or Missing, Store Credit Issued"
+                        ]
+                    }
+                }
+            ],
+            "response_template": "Done! I've issued store credit for the full amount plus a 10% bonus for the inconvenience. The credit is available in your account immediately.\n\nIs there anything else I can help you with?"
+        },
+        {
+            "id": "changed_mind_unfulfilled",
+            "condition": {
+                "all": [
+                    {
+                        "field": "refund_reason",
+                        "operator": "equals",
+                        "value": "CHANGED_MIND"
+                    },
+                    {
+                        "field": "order_status",
+                        "operator": "equals",
+                        "value": "UNFULFILLED"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "changed_mind_cancel_order",
+            "tool_plan": [
+                {
+                    "tool_name": "shopify_cancel_order",
+                    "params_source": {
+                        "orderId": "context.order_gid",
+                        "reason": "CUSTOMER",
+                        "notifyCustomer": true,
+                        "restock": true,
+                        "staffNote": "Changed mind refund workflow",
+                        "refundMode": "ORIGINAL",
+                        "storeCredit": {
+                            "expiresAt": null
+                        }
+                    }
+                },
+                {
+                    "tool_name": "shopify_add_tags",
+                    "params_source": {
+                        "id": "context.order_id",
+                        "tags": [
+                            "Refund, Cancelled Unfulfilled"
+                        ]
+                    }
+                }
+            ],
+            "response_template": "No problem! I've cancelled your order and initiated a full refund to your original payment method. You'll see it within 5-7 business days.\n\nIs there anything else I can help you with?"
+        },
+        {
+            "id": "changed_mind_fulfilled_offer_credit",
+            "condition": {
+                "all": [
+                    {
+                        "field": "refund_reason",
+                        "operator": "equals",
+                        "value": "CHANGED_MIND"
+                    },
+                    {
+                        "field": "order_status",
+                        "operator": "in",
+                        "value": [
+                            "FULFILLED",
+                            "DELIVERED"
+                        ]
+                    },
+                    {
+                        "field": "refund_store_credit_offered",
+                        "operator": "not_equals",
+                        "value": true
+                    }
+                ]
+            },
+            "action": "respond",
+            "policy_applied": "changed_mind_offer_store_credit",
+            "response_template": "I understand! Since your order has already shipped, I can offer you:\n\n1. Store credit for the full amount plus a 10% bonus (available immediately)\n2. A cash refund to your original payment method\n\nWhich would you prefer?",
+            "set_context": {
+                "refund_store_credit_offered": true
+            }
+        },
+        {
+            "id": "changed_mind_accept_store_credit",
+            "condition": {
+                "all": [
+                    {
+                        "field": "refund_reason",
+                        "operator": "equals",
+                        "value": "CHANGED_MIND"
+                    },
+                    {
+                        "field": "refund_store_credit_offered",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "customer_resolution_choice",
+                        "operator": "equals",
+                        "value": "STORE_CREDIT"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "changed_mind_issue_store_credit",
+            "tool_plan": [
+                {
+                    "tool_name": "shopify_create_store_credit",
+                    "params_source": {
+                        "id": "context.customer_id",
+                        "creditAmount": {
+                            "amount": "context.order_total_with_bonus",
+                            "currencyCode": "USD"
+                        },
+                        "expiresAt": null
+                    }
+                },
+                {
+                    "tool_name": "shopify_add_tags",
+                    "params_source": {
+                        "id": "context.order_id",
+                        "tags": [
+                            "Refund, Store Credit Issued"
+                        ]
+                    }
+                }
+            ],
+            "response_template": "Done! I've issued store credit for the full amount plus a 10% bonus. The credit is available in your account immediately."
+        },
+        {
+            "id": "changed_mind_cash_refund",
+            "condition": {
+                "all": [
+                    {
+                        "field": "refund_reason",
+                        "operator": "equals",
+                        "value": "CHANGED_MIND"
+                    },
+                    {
+                        "field": "refund_store_credit_offered",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "customer_resolution_choice",
+                        "operator": "equals",
+                        "value": "REFUND"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "changed_mind_cash_refund",
+            "tool_plan": [
+                {
+                    "tool_name": "shopify_refund_order",
+                    "params_source": {
+                        "orderId": "context.order_gid",
+                        "refundMethod": "ORIGINAL_PAYMENT_METHODS"
+                    }
+                },
+                {
+                    "tool_name": "shopify_add_tags",
+                    "params_source": {
+                        "id": "context.order_id",
+                        "tags": [
+                            "Refund, Cash Refund Issued"
+                        ]
+                    }
+                }
+            ],
+            "response_template": "I've processed your refund to the original payment method. You should see it within 5-7 business days.\n\nIs there anything else I can help you with?"
         }
     ],
     "default_action": {
         "action": "escalate",
-        "policy_applied": "outside_standard_policy",
-        "escalation_reason": "Refund request outside standard policy - requires human review"
+        "policy_applied": "unhandled_refund_case",
+        "escalation_reason": "Refund case requires human review"
     }
 }

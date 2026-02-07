@@ -173,6 +173,16 @@ class ToolsClient:
     def _mock_execute(self, tool_name: str, params: dict) -> dict:
         """Execute tool in mock mode (for hackathon demo)."""
         
+        # Deterministic failure for testing: #INVALID_FOR_TEST order ID
+        order_id = params.get("order_id", "")
+        if "INVALID_FOR_TEST" in str(order_id).upper():
+            return {
+                "success": False,
+                "data": {},
+                "error": "Order not found: invalid order ID or order does not exist",
+                "should_escalate": True
+            }
+        
         # Check catalog for mock_response first
         tool_config = self.catalog.get(tool_name)
         if tool_config and "mock_response" in tool_config:
