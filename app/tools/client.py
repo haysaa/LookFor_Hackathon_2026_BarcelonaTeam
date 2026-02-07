@@ -4,6 +4,7 @@ All tool calls go through here for consistent handling and tracing.
 """
 import json
 import httpx
+import os
 from typing import Any, Optional
 from pathlib import Path
 from app.trace import TraceLogger
@@ -30,7 +31,9 @@ class ToolsClient:
     
     def __init__(self, catalog_path: str = "tools/catalog.json"):
         self.catalog: dict[str, dict] = {}
-        self.mock_mode = True  # Default to mock mode for hackathon
+        # Configure via env vars
+        self.mock_mode = os.getenv("USE_MOCK_TOOLS", "true").lower() == "true"
+        self.base_url = os.getenv("TOOLS_API_URL", "https://lookfor-backend.ngrok.app/v1/api").rstrip("/")
         self._load_catalog(catalog_path)
     
     def _load_catalog(self, path: str):
@@ -255,12 +258,17 @@ class ToolsClient:
             return {"success": False, "error": f"Tool not in catalog: {tool_name}"}
         
         endpoint = tool_config.get("endpoint")
-        if not endpoint:
-            return {"success": False, "error": f"No endpoint for tool: {tool_name}"}
         
+        # URL Construction
+        if endpoint:
+            url = f"{self.base_url}{endpoint}"
+        else:
+            # Fallback: use tool name as endpoint if catalog is null
+            url = f"{self.base_url}/{tool_name}"
+
         try:
             with httpx.Client(timeout=10.0) as client:
-                response = client.post(endpoint, json=params)
+                response = client.post(url, json=params)
                 response.raise_for_status()
                 return response.json()
         except httpx.HTTPError as e:
