@@ -154,3 +154,19 @@ class TraceLogger:
             error=error,
             details=details or {}
         )
+    
+    @staticmethod
+    def log_custom(
+        session_id: str,
+        event_type: str,
+        data: dict[str, Any],
+        agent: str = "system"
+    ) -> TraceEvent:
+        """Log a custom event (e.g., WISMO promise set)."""
+        return TraceLogger.log(
+            session_id,
+            TraceEventType.WORKFLOW_DECISION,
+            agent=agent,
+            custom_event_type=event_type,
+            **data
+        )
