@@ -75,3 +75,16 @@ The WISMO (Where Is My Order) workflow includes day-based delivery promise rules
 - If customer contacts again after deadline and order not delivered → **escalate**
 - Escalation reason: "WISMO promised date passed; requires human to process resend"
 - Session locked (no more automatic replies)
+
+## Docker Support
+
+Run the application using Docker Compose:
+
+1.  Build and run:
+    ```bash
+    docker compose up --build
+    ```
+2.  Access API: `http://localhost:8000/docs`
+3.  Access Health Check: `http://localhost:8000/health`
+
+**Note:** By default, `USE_MOCK_TOOLS=true` is set in `docker-compose.yml` to use mock data instead of real API calls, ensuring stability for demos.

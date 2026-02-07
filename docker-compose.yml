@@ -13,5 +13,5 @@ services:
       # Ensure TICKETS_PATH works inside container (if not set in .env)
       - TICKETS_PATH=fixtures/tickets_real.json
       # Fallback defaults if .env is missing or incomplete
-      - USE_MOCK_TOOLS=${USE_MOCK_TOOLS:-false}
+      - USE_MOCK_TOOLS=${USE_MOCK_TOOLS:-true}
       - TOOLS_API_URL=${TOOLS_API_URL:-https://lookfor-backend.ngrok.app/v1/api}
