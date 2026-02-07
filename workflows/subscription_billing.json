@@ -1,0 +1,243 @@
+{
+    "workflow_name": "SUBSCRIPTION_BILLING",
+    "version": "1.0",
+    "description": "Handles subscription and billing issues using Skio integration",
+    "required_fields": [
+        "email"
+    ],
+    "optional_fields": [
+        "subscription_id",
+        "issue_type",
+        "pause_until_date"
+    ],
+    "tools_available": [
+        "skio_get_subscription_status",
+        "skio_pause_subscription",
+        "skio_unpause_subscription",
+        "skio_skip_next_order_subscription",
+        "skio_cancel_subscription"
+    ],
+    "priority": 2,
+    "issue_types": [
+        "pause_subscription",
+        "cancel_subscription",
+        "skip_order",
+        "resume_subscription",
+        "billing_question"
+    ],
+    "rules": [
+        {
+            "id": "subscription_missing_email",
+            "condition": {
+                "field": "email",
+                "operator": "is_null"
+            },
+            "action": "ask_clarifying",
+            "policy_applied": "require_email_for_subscription",
+            "response": {
+                "clarifying_questions": [
+                    "I'd be happy to help with your subscription. Could you please provide your email address?",
+                    "Aboneliğinizle ilgili yardımcı olmak isterim. Lütfen e-posta adresinizi paylaşır mısınız?"
+                ]
+            }
+        },
+        {
+            "id": "subscription_get_status",
+            "condition": {
+                "all": [
+                    {
+                        "field": "email",
+                        "operator": "is_not_null"
+                    },
+                    {
+                        "field": "subscription_id",
+                        "operator": "is_null"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "fetch_subscription_status",
+            "tool_plan": [
+                {
+                    "tool_name": "skio_get_subscription_status",
+                    "params_source": {
+                        "email": "context.email"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "subscription_pause_request",
+            "condition": {
+                "all": [
+                    {
+                        "field": "issue_type",
+                        "operator": "equals",
+                        "value": "pause_subscription"
+                    },
+                    {
+                        "field": "subscription_id",
+                        "operator": "is_not_null"
+                    },
+                    {
+                        "field": "pause_until_date",
+                        "operator": "is_not_null"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "allow_subscription_pause",
+            "tool_plan": [
+                {
+                    "tool_name": "skio_pause_subscription",
+                    "params_source": {
+                        "subscriptionId": "context.subscription_id",
+                        "pausedUntil": "context.pause_until_date"
+                    }
+                }
+            ],
+            "response_templates": {
+                "en": "I've paused your subscription until {{pause_until_date}}. You won't be charged until then. You can resume anytime!",
+                "tr": "Aboneliğinizi {{pause_until_date}} tarihine kadar duraklattım. O zamana kadar ücretlendirilmeyeceksiniz. İstediğiniz zaman devam ettirebilirsiniz!"
+            }
+        },
+        {
+            "id": "subscription_pause_missing_date",
+            "condition": {
+                "all": [
+                    {
+                        "field": "issue_type",
+                        "operator": "equals",
+                        "value": "pause_subscription"
+                    },
+                    {
+                        "field": "pause_until_date",
+                        "operator": "is_null"
+                    }
+                ]
+            },
+            "action": "ask_clarifying",
+            "policy_applied": "require_pause_date",
+            "response": {
+                "clarifying_questions": [
+                    "I can pause your subscription for you. Until what date would you like to pause it? (e.g., 2026-03-15)",
+                    "Aboneliğinizi duraklatabilir. Hangi tarihe kadar durdurmak istersiniz? (ör: 2026-03-15)"
+                ]
+            }
+        },
+        {
+            "id": "subscription_resume",
+            "condition": {
+                "all": [
+                    {
+                        "field": "issue_type",
+                        "operator": "equals",
+                        "value": "resume_subscription"
+                    },
+                    {
+                        "field": "subscription_id",
+                        "operator": "is_not_null"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "allow_subscription_resume",
+            "tool_plan": [
+                {
+                    "tool_name": "skio_unpause_subscription",
+                    "params_source": {
+                        "subscriptionId": "context.subscription_id"
+                    }
+                }
+            ],
+            "response_templates": {
+                "en": "Great! I've resumed your subscription. Your next order will be processed as scheduled.",
+                "tr": "Harika! Aboneliğinizi yeniden başlattım. Bir sonraki siparişiniz planlandığı gibi işleme alınacak."
+            }
+        },
+        {
+            "id": "subscription_skip_order",
+            "condition": {
+                "all": [
+                    {
+                        "field": "issue_type",
+                        "operator": "equals",
+                        "value": "skip_order"
+                    },
+                    {
+                        "field": "subscription_id",
+                        "operator": "is_not_null"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "allow_skip_next_order",
+            "tool_plan": [
+                {
+                    "tool_name": "skio_skip_next_order_subscription",
+                    "params_source": {
+                        "subscriptionId": "context.subscription_id"
+                    }
+                }
+            ],
+            "response_templates": {
+                "en": "I've skipped your next order. Your subscription will continue with the following delivery.",
+                "tr": "Bir sonraki siparişinizi atladım. Aboneliğiniz bir sonraki teslimat ile devam edecek."
+            }
+        },
+        {
+            "id": "subscription_cancel_request",
+            "condition": {
+                "all": [
+                    {
+                        "field": "issue_type",
+                        "operator": "equals",
+                        "value": "cancel_subscription"
+                    },
+                    {
+                        "field": "subscription_id",
+                        "operator": "is_not_null"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "allow_subscription_cancellation",
+            "tool_plan": [
+                {
+                    "tool_name": "skio_cancel_subscription",
+                    "params_source": {
+                        "subscriptionId": "context.subscription_id",
+                        "cancellationReasons": [
+                            "customer_request"
+                        ]
+                    }
+                }
+            ],
+            "response_templates": {
+                "en": "I've cancelled your subscription. You won't be charged again. We're sorry to see you go! If you change your mind, you can always resubscribe.",
+                "tr": "Aboneliğinizi iptal ettim. Bir daha ücretlendirilmeyeceksiniz. Sizi kaybettiğimiz için üzgünüz! Fikrinizi değiştirirseniz, her zaman yeniden abone olabilirsiniz."
+            }
+        },
+        {
+            "id": "subscription_billing_question",
+            "condition": {
+                "field": "issue_type",
+                "operator": "equals",
+                "value": "billing_question"
+            },
+            "action": "escalate",
+            "policy_applied": "billing_questions_need_human",
+            "escalation_reason": "Billing inquiry requires human review",
+            "priority": "medium",
+            "response_templates": {
+                "en": "Let me connect you with our billing team who can help you with this.",
+                "tr": "Fatura ekibimizle sizi bağlantılandırayım, size yardımcı olacaklar."
+            }
+        }
+    ],
+    "default_action": {
+        "action": "escalate",
+        "policy_applied": "unhandled_subscription_case",
+        "escalation_reason": "Subscription issue requires human review"
+    }
+}

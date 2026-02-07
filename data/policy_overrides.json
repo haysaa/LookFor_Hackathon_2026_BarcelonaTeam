@@ -1,0 +1,15 @@
+{
+  "order_modification_address_change": {
+    "override_id": "order_modification_address_change",
+    "workflow": "ORDER_MODIFICATION",
+    "rule_id": "order_modification_address_change",
+    "override_action": "escalate",
+    "original_prompt": "If a customer wants to update their order address, do not update it directly. Mark the order as 'NEEDS_ATTENTION' and escalate the situation.",
+    "context_updates": {},
+    "tool_param_overrides": {},
+    "escalation_reason": "Customer requested address update, requires manual intervention.",
+    "response_template_override": null,
+    "active": true,
+    "created_at": "2026-02-07T12:51:57.257980"
+  }
+}

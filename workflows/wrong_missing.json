@@ -14,10 +14,10 @@
         "shipping_label"
     ],
     "tools_available": [
-        "shopify_get_order_details",
+        "check_order_status",
         "shopify_create_store_credit",
         "shopify_refund_order",
-        "shopify_create_return"
+        "request_reship"
     ],
     "priority_order": [
         "reship",

@@ -1,0 +1,104 @@
+{
+    "workflow_name": "POSITIVE_FEEDBACK",
+    "version": "1.0",
+    "description": "Handles positive feedback, thank you messages, and compliments from customers",
+    "required_fields": [],
+    "optional_fields": [
+        "customer_id",
+        "order_id",
+        "feedback_type"
+    ],
+    "tools_available": [
+        "shopify_add_tags"
+    ],
+    "priority": 5,
+    "feedback_types": [
+        "thank_you",
+        "compliment",
+        "product_praise",
+        "service_praise"
+    ],
+    "rules": [
+        {
+            "id": "feedback_tag_customer",
+            "condition": {
+                "field": "customer_id",
+                "operator": "is_not_null"
+            },
+            "action": "call_tool",
+            "policy_applied": "tag_positive_feedback_customers",
+            "tool_plan": [
+                {
+                    "tool_name": "shopify_add_tags",
+                    "params_source": {
+                        "id": "context.customer_id",
+                        "tags": [
+                            "positive_feedback",
+                            "happy_customer"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "feedback_respond",
+            "condition": {
+                "field": "feedback_type",
+                "operator": "is_not_null"
+            },
+            "action": "respond",
+            "policy_applied": "acknowledge_positive_feedback",
+            "response_templates": {
+                "en": "Thank you so much for your kind words! We're thrilled to hear you're happy with your experience. Your feedback means the world to us! 🎉",
+                "tr": "Güzel sözleriniz için çok teşekkür ederiz! Deneyiminizden memnun olduğunuzu duymak bizi çok mutlu etti. Geribildiriminiz bizim için çok değerli! 🎉"
+            }
+        },
+        {
+            "id": "feedback_product_specific",
+            "condition": {
+                "all": [
+                    {
+                        "field": "feedback_type",
+                        "operator": "equals",
+                        "value": "product_praise"
+                    },
+                    {
+                        "field": "order_id",
+                        "operator": "is_not_null"
+                    }
+                ]
+            },
+            "action": "respond",
+            "policy_applied": "acknowledge_product_praise",
+            "response_templates": {
+                "en": "We're so glad you love the product! Thank you for sharing your experience. If you'd like to see more similar items, I'd be happy to recommend some! 😊",
+                "tr": "Ürünümüzü beğenmenize çok sevindik! Deneyiminizi paylaştığınız için teşekkürler. Benzer ürünler görmek isterseniz, size önerilerde bulunabilirim! 😊"
+            },
+            "set_context": {
+                "offer_recommendations": true
+            }
+        },
+        {
+            "id": "feedback_service_praise",
+            "condition": {
+                "field": "feedback_type",
+                "operator": "equals",
+                "value": "service_praise"
+            },
+            "action": "respond",
+            "policy_applied": "acknowledge_service_praise",
+            "response_templates": {
+                "en": "Thank you for recognizing our team's efforts! We're always here to help. Your satisfaction is our priority! 💙",
+                "tr": "Ekibimizin çabalarını takdir ettiğiniz için teşekkür ederiz! Size yardımcı olmak için her zaman buradayız. Memnuniyetiniz bizim önceliğimiz! 💙"
+            }
+        }
+    ],
+    "default_action": {
+        "action": "respond",
+        "policy_applied": "generic_positive_acknowledgment",
+        "response_templates": {
+            "en": "Thank you for your feedback! We're delighted to serve you. Is there anything else I can help you with today?",
+            "tr": "Geri bildiriminiz için teşekkürler! Size hizmet vermekten mutluluk duyuyoruz. Bugün yardımcı olabileceğim başka bir şey var mı?"
+        }
+    }
+}

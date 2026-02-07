@@ -1,17 +1,25 @@
 {
     "workflow_name": "REFUND_STANDARD",
-    "version": "1.0",
+    "version": "2.0",
     "description": "Standard refund request handler - routes to appropriate workflow based on reason",
     "required_fields": [
-        "order_id"
-    ],
-    "optional_fields": [
+        "order_id",
         "refund_reason"
     ],
+    "optional_fields": [],
     "tools_available": [
-        "shopify_get_order_details",
+        "check_order_status",
         "shopify_refund_order",
         "shopify_create_store_credit"
+    ],
+    "priority": 3,
+    "refund_reasons": [
+        "shipping_delay",
+        "wrong_item",
+        "missing_item",
+        "changed_mind",
+        "no_longer_needed",
+        "other"
     ],
     "rules": [
         {
@@ -24,7 +32,8 @@
             "policy_applied": "require_order_id",
             "response": {
                 "clarifying_questions": [
-                    "I'd be happy to help with your refund request. Could you please provide your order number?"
+                    "I'd be happy to help with your refund request. Could you please provide your order number?",
+                    "İade talebinizde yardımcı olmak istiyorum. Lütfen sipariş numaranızı verir misiniz?"
                 ]
             }
         },
@@ -46,8 +55,8 @@
             "policy_applied": "require_refund_reason",
             "response": {
                 "clarifying_questions": [
-                    "Could you please tell me the reason for your refund request?",
-                    "For example: shipping delay, wrong/missing item, changed mind, product issue, etc."
+                    "Could you please tell me the reason for your refund request? For example: shipping delay, wrong/missing item, changed mind, etc.",
+                    "İade talebinizin nedenini belirtir misiniz? (kargo gecikmesi, yanlış ürün, eksik ürün, fikrimi değiştirdim, diğer)"
                 ]
             }
         },
@@ -60,8 +69,7 @@
                     "shipping_delay",
                     "late_delivery",
                     "delayed",
-                    "not_arrived",
-                    "waiting"
+                    "not_arrived"
                 ]
             },
             "action": "route_to_workflow",
@@ -110,7 +118,10 @@
             },
             "action": "respond",
             "policy_applied": "offer_store_credit_first",
-            "response_template": "I understand you'd like a refund. We can offer you store credit with an extra 10% bonus, which you can use on any future purchase. Would you prefer that, or would you like a refund to your original payment method?",
+            "response_templates": {
+                "en": "I understand you'd like a refund. We can offer you store credit with an extra 10% bonus, which you can use on any future purchase. Would you prefer that, or would you like a refund to your original payment method?",
+                "tr": "İade talebinizi anladım. Size tam sipariş bedeli + %10 bonus ile store credit teklif edebiliriz. Bunu mu tercih edersiniz, yoksa orijinal ödeme yönteminize iade mi istiyorsunuz?"
+            },
             "set_context": {
                 "store_credit_offered": true
             }
@@ -144,7 +155,10 @@
                     }
                 }
             ],
-            "response_template": "Great! We've issued store credit for the full value of your order plus a 10% bonus. You can start using it immediately."
+            "response_templates": {
+                "en": "Great! We've issued store credit for the full value of your order plus a 10% bonus. You can start using it immediately.",
+                "tr": "Harika! Siparişinizin tam bedeli + %10 bonus ile store credit vermiş bulunuyoruz. Hemen kullanmaya başlayabilirsiniz."
+            }
         },
         {
             "id": "refund_process_cash",
@@ -173,7 +187,10 @@
                     }
                 }
             ],
-            "response_template": "We've processed your refund. The amount will be credited to your original payment method within 5-7 business days."
+            "response_templates": {
+                "en": "We've processed your refund. The amount will be credited to your original payment method within 5-7 business days.",
+                "tr": "İade talebiniz işleme alınmıştır. Tutar 5-7 iş günü içinde orijinal ödeme yönteminize yansıyacaktır."
+            }
         },
         {
             "id": "refund_unclear_reason",
@@ -191,7 +208,6 @@
                             "late_delivery",
                             "delayed",
                             "not_arrived",
-                            "waiting",
                             "wrong_item",
                             "missing_item",
                             "wrong",
@@ -210,8 +226,8 @@
             "policy_applied": "unclear_reason_clarification",
             "response": {
                 "clarifying_questions": [
-                    "Could you provide more details about your refund request?",
-                    "Is it related to: shipping issues, receiving a wrong or missing item, or another reason?"
+                    "Could you provide more details about your refund request? Is it related to: shipping issues, receiving a wrong or missing item, or another reason?",
+                    "İade talebiniz hakkında daha fazla bilgi verebilir misiniz? Kargo sorunu, yanlış/eksik ürün mi, yoksa başka bir neden mi?"
                 ]
             }
         }

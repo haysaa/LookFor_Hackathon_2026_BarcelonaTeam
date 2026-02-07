@@ -1,0 +1,256 @@
+{
+    "workflow_name": "DISCOUNT_PROMO",
+    "version": "1.0",
+    "description": "Handles discount and promo code issues - code not working, expired, or compensation requests",
+    "required_fields": [],
+    "optional_fields": [
+        "promo_code",
+        "issue_type",
+        "customer_id",
+        "order_id"
+    ],
+    "tools_available": [
+        "shopify_create_discount_code",
+        "shopify_get_order_details"
+    ],
+    "priority": 3,
+    "issue_types": [
+        "code_not_working",
+        "code_expired",
+        "request_discount",
+        "apply_to_existing_order"
+    ],
+    "rules": [
+        {
+            "id": "promo_code_not_working",
+            "condition": {
+                "all": [
+                    {
+                        "field": "issue_type",
+                        "operator": "equals",
+                        "value": "code_not_working"
+                    },
+                    {
+                        "field": "promo_code",
+                        "operator": "is_not_null"
+                    }
+                ]
+            },
+            "action": "ask_clarifying",
+            "policy_applied": "diagnose_code_issue",
+            "response": {
+                "clarifying_questions": [
+                    "I'm sorry to hear the code isn't working. Let me help! Could you provide:",
+                    "1. The exact error message you're seeing",
+                    "2. The items in your cart",
+                    "There may be minimum purchase requirements or product restrictions on the code.",
+                    "Kodun çalışmadığını duyduğuma üzüldüm. Yardımcı olayım! Lütfen şunları paylaşır mısınız:",
+                    "1. Gördüğünüz hata mesajı",
+                    "2. Sepetinizdeki ürünler",
+                    "Kod için minimum alışveriş tutarı veya ürün kısıtlamaları olabilir."
+                ]
+            }
+        },
+        {
+            "id": "promo_code_expired",
+            "condition": {
+                "all": [
+                    {
+                        "field": "issue_type",
+                        "operator": "equals",
+                        "value": "code_expired"
+                    },
+                    {
+                        "field": "customer_id",
+                        "operator": "is_not_null"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "replacement_code_for_expired",
+            "tool_plan": [
+                {
+                    "tool_name": "shopify_create_discount_code",
+                    "params_source": {
+                        "type": "percentage",
+                        "value": 0.1,
+                        "duration": 48,
+                        "productIds": []
+                    }
+                }
+            ],
+            "response_templates": {
+                "en": "I apologize that the code expired! I've created a new 10% discount code for you: {{discount_code}}. It's valid for 48 hours. Happy shopping!",
+                "tr": "Kodun süresinin dolması için özür dilerim! Size yeni bir %10 indirim kodu oluşturdum: {{discount_code}}. 48 saat geçerli. İyi alışverişler!"
+            }
+        },
+        {
+            "id": "promo_request_discount",
+            "condition": {
+                "all": [
+                    {
+                        "field": "issue_type",
+                        "operator": "equals",
+                        "value": "request_discount"
+                    },
+                    {
+                        "field": "customer_id",
+                        "operator": "is_not_null"
+                    }
+                ]
+            },
+            "action": "respond",
+            "policy_applied": "politely_decline_discount_request",
+            "response_templates": {
+                "en": "I appreciate your interest! While I can't provide a discount code right now, I recommend:",
+                "1. Subscribe to our newsletter for exclusive offers",
+                "2. Follow us on social media for flash sales",
+                "3. Check our promotions page for current deals",
+                "Is there anything else I can help you with?",
+                "tr": "İlginiz için teşekkürler! Şu anda indirim kodu sağlayamasam da, şunları öneriyorum:",
+                "1. Özel teklifler için bültenimize abone olun",
+                "2. Flaş indirimler için sosyal medyada bizi takip edin",
+                "3. Mevcut kampanyalar için promosyonlar sayfamıza bakın",
+                "Başka yardımcı olabileceğim bir şey var mı?"
+            }
+        },
+        {
+            "id": "promo_apply_to_existing_order",
+            "condition": {
+                "all": [
+                    {
+                        "field": "issue_type",
+                        "operator": "equals",
+                        "value": "apply_to_existing_order"
+                    },
+                    {
+                        "field": "order_id",
+                        "operator": "is_not_null"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "check_order_eligibility",
+            "tool_plan": [
+                {
+                    "tool_name": "shopify_get_order_details",
+                    "params_source": {
+                        "orderId": "context.order_id"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "promo_existing_order_not_shipped",
+            "condition": {
+                "all": [
+                    {
+                        "field": "issue_type",
+                        "operator": "equals",
+                        "value": "apply_to_existing_order"
+                    },
+                    {
+                        "field": "shipping_status",
+                        "operator": "not_in",
+                        "value": [
+                            "shipped",
+                            "delivered"
+                        ]
+                    }
+                ]
+            },
+            "action": "escalate",
+            "policy_applied": "retroactive_discount_needs_approval",
+            "escalation_reason": "Customer wants discount applied to existing order - requires manual adjustment",
+            "priority": "low",
+            "response_templates": {
+                "en": "Let me connect you with our team to apply the discount to your existing order.",
+                "tr": "Var olan siparişinize indirimi uygulamak için ekibimizle bağlantılandırayım."
+            }
+        },
+        {
+            "id": "promo_existing_order_shipped",
+            "condition": {
+                "all": [
+                    {
+                        "field": "issue_type",
+                        "operator": "equals",
+                        "value": "apply_to_existing_order"
+                    },
+                    {
+                        "field": "shipping_status",
+                        "operator": "in",
+                        "value": [
+                            "shipped",
+                            "delivered"
+                        ]
+                    },
+                    {
+                        "field": "customer_id",
+                        "operator": "is_not_null"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "compensation_code_for_shipped_order",
+            "tool_plan": [
+                {
+                    "tool_name": "shopify_create_discount_code",
+                    "params_source": {
+                        "type": "percentage",
+                        "value": 0.1,
+                        "duration": 72,
+                        "productIds": []
+                    }
+                }
+            ],
+            "response_templates": {
+                "en": "Since your order has already shipped, I can't modify it. However, I've created a 10% discount code for your next order as a goodwill gesture: {{discount_code}}. It's valid for 72 hours.",
+                "tr": "Siparişiniz zaten gönderildiği için değişiklik yapamıyorum. Ancak bir sonraki siparişiniz için iyiniyet jesti olarak %10 indirim kodu oluşturdum: {{discount_code}}. 72 saat geçerli."
+            }
+        },
+        {
+            "id": "promo_first_order_discount",
+            "condition": {
+                "all": [
+                    {
+                        "field": "issue_type",
+                        "operator": "equals",
+                        "value": "request_discount"
+                    },
+                    {
+                        "field": "is_first_time_customer",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "customer_id",
+                        "operator": "is_not_null"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "first_order_welcome_discount",
+            "tool_plan": [
+                {
+                    "tool_name": "shopify_create_discount_code",
+                    "params_source": {
+                        "type": "percentage",
+                        "value": 0.15,
+                        "duration": 24,
+                        "productIds": []
+                    }
+                }
+            ],
+            "response_templates": {
+                "en": "Welcome! As a first-time customer, here's a special 15% discount code just for you: {{discount_code}}. Valid for 24 hours!",
+                "tr": "Hoş geldiniz! İlk kez alışveriş yapan müşterilerimiz için özel %15 indirim kodunuz: {{discount_code}}. 24 saat geçerli!"
+            }
+        }
+    ],
+    "default_action": {
+        "action": "escalate",
+        "policy_applied": "unhandled_promo_case",
+        "escalation_reason": "Discount/promo issue requires human review"
+    }
+}

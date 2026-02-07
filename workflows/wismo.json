@@ -1,6 +1,6 @@
 {
     "workflow_name": "WISMO",
-    "version": "1.0",
+    "version": "2.0",
     "description": "Where Is My Order - Handles shipping delay inquiries with day-based promise logic",
     "required_fields": [
         "order_id"
@@ -14,6 +14,7 @@
     "tools_available": [
         "shopify_get_order_details"
     ],
+    "priority": 1,
     "rules": [
         {
             "id": "wismo_missing_order_id",
@@ -83,7 +84,10 @@
             },
             "action": "respond",
             "policy_applied": "friday_promise",
-            "response_template": "Your order is on its way! Based on current shipping updates, your package will arrive by Friday. We'll keep tracking it for you.",
+            "response_templates": {
+                "en": "Your order is on its way! Based on current shipping updates, your package will arrive by Friday. We'll keep tracking it for you.",
+                "tr": "Siparişiniz Cuma gününe kadar size ulaşacaktır. Anlayışınız için teşekkür ederiz."
+            },
             "set_context": {
                 "promise_given": "friday"
             }
@@ -115,7 +119,10 @@
             },
             "action": "respond",
             "policy_applied": "next_week_promise",
-            "response_template": "Your order is on its way! Based on current shipping updates, your package will arrive early next week. We'll keep tracking it for you.",
+            "response_templates": {
+                "en": "Your order is on its way! Based on current shipping updates, your package will arrive early next week. We'll keep tracking it for you.",
+                "tr": "Siparişiniz önümüzdeki hafta başında size ulaşacaktır. Anlayışınız için teşekkür ederiz."
+            },
             "set_context": {
                 "promise_given": "next_week"
             }

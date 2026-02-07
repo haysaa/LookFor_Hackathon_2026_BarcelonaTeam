@@ -1,0 +1,220 @@
+{
+    "workflow_name": "ORDER_MODIFICATION",
+    "version": "1.0",
+    "description": "Handles order modification requests - address changes, item changes, cancellation",
+    "required_fields": [
+        "order_id"
+    ],
+    "optional_fields": [
+        "modification_type",
+        "new_address",
+        "shipping_status"
+    ],
+    "tools_available": [
+        "shopify_get_order_details",
+        "shopify_update_order_shipping_address",
+        "shopify_cancel_order"
+    ],
+    "priority": 2,
+    "modification_types": [
+        "address_change",
+        "cancel_order",
+        "item_change"
+    ],
+    "rules": [
+        {
+            "id": "order_mod_missing_order_id",
+            "condition": {
+                "field": "order_id",
+                "operator": "is_null"
+            },
+            "action": "ask_clarifying",
+            "policy_applied": "require_order_id",
+            "response": {
+                "clarifying_questions": [
+                    "I'd be happy to help with your order modification. Could you please provide your order number?",
+                    "Sipariş değişikliğinizde yardımcı olmak isterim. Lütfen sipariş numaranızı paylaşır mısınız?"
+                ]
+            }
+        },
+        {
+            "id": "order_mod_check_status",
+            "condition": {
+                "all": [
+                    {
+                        "field": "order_id",
+                        "operator": "is_not_null"
+                    },
+                    {
+                        "field": "shipping_status",
+                        "operator": "is_null"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "fetch_order_status_first",
+            "tool_plan": [
+                {
+                    "tool_name": "shopify_get_order_details",
+                    "params_source": {
+                        "orderId": "context.order_id"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "order_mod_address_change_allowed",
+            "condition": {
+                "all": [
+                    {
+                        "field": "modification_type",
+                        "operator": "equals",
+                        "value": "address_change"
+                    },
+                    {
+                        "field": "shipping_status",
+                        "operator": "not_in",
+                        "value": [
+                            "shipped",
+                            "delivered"
+                        ]
+                    },
+                    {
+                        "field": "new_address",
+                        "operator": "is_not_null"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "address_change_before_shipment",
+            "tool_plan": [
+                {
+                    "tool_name": "shopify_update_order_shipping_address",
+                    "params_source": {
+                        "orderId": "context.order_id",
+                        "shippingAddress": "context.new_address"
+                    }
+                }
+            ],
+            "response_templates": {
+                "en": "Great! I've updated your shipping address. Your order will now be delivered to the new address.",
+                "tr": "Harika! Kargo adresinizi güncelledim. Siparişiniz yeni adrese teslim edilecek."
+            }
+        },
+        {
+            "id": "order_mod_address_change_too_late",
+            "condition": {
+                "all": [
+                    {
+                        "field": "modification_type",
+                        "operator": "equals",
+                        "value": "address_change"
+                    },
+                    {
+                        "field": "shipping_status",
+                        "operator": "in",
+                        "value": [
+                            "shipped",
+                            "delivered"
+                        ]
+                    }
+                ]
+            },
+            "action": "escalate",
+            "policy_applied": "cannot_change_shipped_order",
+            "escalation_reason": "Order already shipped - address cannot be changed automatically",
+            "priority": "medium",
+            "response_templates": {
+                "en": "Your order has already been shipped, so I cannot change the address automatically. Let me connect you with our team to see what we can do.",
+                "tr": "Siparişiniz zaten kargoya verildiği için adresi otomatik olarak değiştiremiyorum. Ekibimiz size yardımcı olacak."
+            }
+        },
+        {
+            "id": "order_mod_cancel_before_shipment",
+            "condition": {
+                "all": [
+                    {
+                        "field": "modification_type",
+                        "operator": "equals",
+                        "value": "cancel_order"
+                    },
+                    {
+                        "field": "shipping_status",
+                        "operator": "not_in",
+                        "value": [
+                            "shipped",
+                            "delivered"
+                        ]
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "cancel_before_shipment_allowed",
+            "tool_plan": [
+                {
+                    "tool_name": "shopify_cancel_order",
+                    "params_source": {
+                        "orderId": "context.order_id",
+                        "reason": "CUSTOMER",
+                        "notifyCustomer": true,
+                        "restock": true,
+                        "staffNote": "Customer requested cancellation before shipment",
+                        "refundMode": "ORIGINAL",
+                        "storeCredit": {
+                            "expiresAt": null
+                        }
+                    }
+                }
+            ],
+            "response_templates": {
+                "en": "I've cancelled your order and processed a full refund. The amount will be returned to your original payment method within 5-7 business days.",
+                "tr": "Siparişinizi iptal ettim ve tam iade işlemini başlattım. Tutar 5-7 iş günü içinde ödeme yönteminize iade edilecek."
+            }
+        },
+        {
+            "id": "order_mod_cancel_after_shipment",
+            "condition": {
+                "all": [
+                    {
+                        "field": "modification_type",
+                        "operator": "equals",
+                        "value": "cancel_order"
+                    },
+                    {
+                        "field": "shipping_status",
+                        "operator": "in",
+                        "value": [
+                            "shipped",
+                            "delivered"
+                        ]
+                    }
+                ]
+            },
+            "action": "route_to_workflow",
+            "target_workflow": "REFUND_STANDARD",
+            "policy_applied": "shipped_orders_use_refund_process",
+            "note": "Order already shipped, routing to standard refund workflow"
+        },
+        {
+            "id": "order_mod_item_change_escalate",
+            "condition": {
+                "field": "modification_type",
+                "operator": "equals",
+                "value": "item_change"
+            },
+            "action": "escalate",
+            "policy_applied": "item_changes_require_manual_review",
+            "escalation_reason": "Item modification requests require manual approval",
+            "priority": "medium",
+            "response_templates": {
+                "en": "Item changes require special handling. Let me connect you with our team who can assist you.",
+                "tr": "Ürün değişikliği özel işlem gerektiriyor. Ekibimiz size yardımcı olacak."
+            }
+        }
+    ],
+    "default_action": {
+        "action": "escalate",
+        "policy_applied": "unhandled_modification_case",
+        "escalation_reason": "Order modification request requires human review"
+    }
+}

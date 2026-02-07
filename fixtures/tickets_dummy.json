@@ -1,0 +1,50 @@
+[
+    {
+        "conversationId": "wismo-001@email.com",
+        "customerId": "cust_12345678",
+        "createdAt": "03-Feb-2026 10:30:00",
+        "ConversationType": "email",
+        "subject": "Where is my order?",
+        "conversation": "Hello, I ordered 3 days ago but there is still no shipping info. My order number is ORD-12345. When will it arrive?"
+    },
+    {
+        "conversationId": "wismo-002@email.com",
+        "customerId": "cust_23456789",
+        "createdAt": "04-Feb-2026 14:15:00",
+        "ConversationType": "email",
+        "subject": "Shipping tracking",
+        "conversation": "I cannot track my order. Can you give me the tracking number? Order: ORD-67890"
+    },
+    {
+        "conversationId": "wrong-001@email.com",
+        "customerId": "cust_34567890",
+        "createdAt": "02-Feb-2026 09:00:00",
+        "ConversationType": "email",
+        "subject": "Wrong item received",
+        "conversation": "Hi, I ordered a blue t-shirt but received a red one. I want to exchange it."
+    },
+    {
+        "conversationId": "missing-001@email.com",
+        "customerId": "cust_45678901",
+        "createdAt": "05-Feb-2026 16:45:00",
+        "ConversationType": "email",
+        "subject": "Missing item",
+        "conversation": "There is an item missing from my package. I ordered 2 items but only 1 arrived. Attaching photos."
+    },
+    {
+        "conversationId": "refund-001@email.com",
+        "customerId": "cust_56789012",
+        "createdAt": "01-Feb-2026 11:20:00",
+        "ConversationType": "email",
+        "subject": "Refund request",
+        "conversation": "I want to cancel my order and get a refund. The item will arrive too late, so I changed my mind."
+    },
+    {
+        "conversationId": "refund-002@email.com",
+        "customerId": "cust_67890123",
+        "createdAt": "06-Feb-2026 08:30:00",
+        "ConversationType": "email",
+        "subject": "I want a refund",
+        "conversation": "Hello, the product I received was not as expected. I am requesting a full refund."
+    }
+]
