@@ -1,12 +1,13 @@
 {
     "workflow_name": "WRONG_MISSING",
-    "version": "1.0",
-    "description": "Handles wrong or missing item complaints with evidence-based resolution",
+    "version": "2.0",
+    "description": "Handles wrong or missing item complaints with photo evidence and resolution options",
     "required_fields": [
         "order_id"
     ],
     "optional_fields": [
-        "item_name"
+        "item_name",
+        "wrong_missing_type"
     ],
     "evidence_fields": [
         "item_photo",
@@ -14,10 +15,11 @@
         "shipping_label"
     ],
     "tools_available": [
-        "check_order_status",
+        "shopify_get_customer_orders",
+        "shopify_get_order_details",
         "shopify_create_store_credit",
         "shopify_refund_order",
-        "request_reship"
+        "shopify_add_tags"
     ],
     "priority_order": [
         "reship",
@@ -26,138 +28,357 @@
     ],
     "rules": [
         {
-            "id": "wrong_missing_no_order",
+            "id": "fetch_customer_orders",
             "condition": {
-                "field": "order_id",
-                "operator": "is_null"
+                "all": [
+                    {
+                        "field": "order_id",
+                        "operator": "is_null"
+                    },
+                    {
+                        "field": "orders_fetched",
+                        "operator": "not_equals",
+                        "value": true
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "fetch_customer_orders",
+            "tool_plan": [
+                {
+                    "tool_name": "shopify_get_customer_orders",
+                    "params_source": {
+                        "email": "context.customer_email",
+                        "after": "null",
+                        "limit": 10
+                    }
+                }
+            ],
+            "set_context": {
+                "orders_fetched": true
+            }
+        },
+        {
+            "id": "require_order_id",
+            "condition": {
+                "all": [
+                    {
+                        "field": "order_id",
+                        "operator": "is_null"
+                    },
+                    {
+                        "field": "orders_fetched",
+                        "operator": "equals",
+                        "value": true
+                    }
+                ]
             },
             "action": "ask_clarifying",
             "policy_applied": "require_order_id",
             "response": {
                 "clarifying_questions": [
-                    "I'm sorry to hear about the issue with your order. Can you please provide your order number?"
+                    "I'm sorry to hear about the issue with your order. Could you please provide your order number (e.g., #1234)?"
                 ]
             }
         },
         {
-            "id": "wrong_missing_evidence_incomplete",
+            "id": "fetch_order_details",
             "condition": {
-                "any": [
+                "all": [
                     {
-                        "field": "evidence.item_photo",
-                        "operator": "equals",
-                        "value": false
+                        "field": "order_id",
+                        "operator": "not_null"
                     },
                     {
-                        "field": "evidence.packing_slip",
-                        "operator": "equals",
-                        "value": false
+                        "field": "order_status",
+                        "operator": "is_null"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "fetch_order_details",
+            "tool_plan": [
+                {
+                    "tool_name": "shopify_get_order_details",
+                    "params_source": {
+                        "orderId": "context.order_id"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "ask_wrong_or_missing",
+            "condition": {
+                "all": [
+                    {
+                        "field": "order_id",
+                        "operator": "not_null"
                     },
                     {
-                        "field": "evidence.shipping_label",
-                        "operator": "equals",
-                        "value": false
+                        "field": "order_status",
+                        "operator": "not_null"
+                    },
+                    {
+                        "field": "wrong_missing_type",
+                        "operator": "is_null"
                     }
                 ]
             },
             "action": "ask_clarifying",
-            "policy_applied": "evidence_requirement",
-            "required_fields_missing": [
-                "item_photo",
-                "packing_slip",
-                "shipping_label"
-            ],
+            "policy_applied": "clarify_issue_type",
             "response": {
                 "clarifying_questions": [
-                    "To help resolve this quickly, could you please provide:",
-                    "1. A photo of the item you received (if wrong item) or the package contents (if missing)",
-                    "2. A photo of the packing slip that came with your order",
-                    "3. A photo of the shipping label on the package"
-                ],
-                "note": "This helps us verify the issue and process your claim faster."
+                    "Was an item missing from your order, or did you receive the wrong item?"
+                ]
             }
         },
         {
-            "id": "wrong_missing_reship_request",
+            "id": "request_photos",
             "condition": {
                 "all": [
                     {
-                        "field": "evidence_complete",
+                        "field": "order_id",
+                        "operator": "not_null"
+                    },
+                    {
+                        "field": "order_status",
+                        "operator": "not_null"
+                    },
+                    {
+                        "field": "wrong_missing_type",
+                        "operator": "not_null"
+                    },
+                    {
+                        "field": "photos_requested",
+                        "operator": "not_equals",
+                        "value": true
+                    }
+                ]
+            },
+            "action": "respond",
+            "policy_applied": "request_evidence_photos",
+            "response_template": "To get this sorted fast, could you please send:\n\n• A photo of the items you received\n• If there is a packing slip, please share a photo of it too\n• If possible, a photo of the outside shipping label on the box\n\nThis helps us verify the issue and process your claim faster.",
+            "set_context": {
+                "photos_requested": true
+            }
+        },
+        {
+            "id": "acknowledge_photos",
+            "condition": {
+                "all": [
+                    {
+                        "field": "photos_requested",
                         "operator": "equals",
                         "value": true
                     },
                     {
-                        "field": "customer_preference",
-                        "operator": "is_null_or",
-                        "value": "reship"
+                        "field": "photos_received",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "reship_offered",
+                        "operator": "not_equals",
+                        "value": true
+                    }
+                ]
+            },
+            "action": "respond",
+            "policy_applied": "offer_reship_first",
+            "response_template": "Thank you for sending those photos! We can see the issue clearly.\n\nWe can reship the correct/missing item for free right away. This is usually the fastest way to get you what you ordered. Would you like us to proceed with the reship?",
+            "set_context": {
+                "reship_offered": true
+            }
+        },
+        {
+            "id": "offer_reship_to_refund_requester",
+            "condition": {
+                "all": [
+                    {
+                        "field": "photos_received",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "customer_resolution_preference",
+                        "operator": "equals",
+                        "value": "CASH_REFUND"
+                    },
+                    {
+                        "field": "reship_offered",
+                        "operator": "not_equals",
+                        "value": true
+                    }
+                ]
+            },
+            "action": "respond",
+            "policy_applied": "offer_reship_before_refund",
+            "response_template": "I understand you'd prefer a refund. Before we process that, I wanted to mention that a reship is usually faster than a refund - we can get the correct/missing item out to you right away.\n\nWould you like us to reship the item instead?",
+            "set_context": {
+                "reship_offered": true
+            }
+        },
+        {
+            "id": "accept_reship",
+            "condition": {
+                "all": [
+                    {
+                        "field": "reship_offered",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "customer_resolution_preference",
+                        "operator": "equals",
+                        "value": "RESHIP"
                     }
                 ]
             },
             "action": "escalate",
-            "policy_applied": "reship_priority",
-            "escalation_reason": "Reship request requires manual approval - customer has provided all evidence",
-            "priority": "medium",
-            "note": "Reship is the fastest resolution for customer but requires human approval"
+            "policy_applied": "reship_requires_manual_processing",
+            "escalation_reason": "Wrong/Missing item requires manual reship processing",
+            "priority": "high",
+            "add_tags": [
+                "Wrong or Missing",
+                "Reship Requested"
+            ],
+            "lock_session": true
         },
         {
-            "id": "wrong_missing_store_credit",
+            "id": "offer_store_credit",
             "condition": {
                 "all": [
                     {
-                        "field": "evidence_complete",
+                        "field": "reship_offered",
                         "operator": "equals",
                         "value": true
                     },
                     {
-                        "field": "customer_preference",
+                        "field": "customer_resolution_preference",
+                        "operator": "in",
+                        "value": [
+                            "CASH_REFUND",
+                            null
+                        ]
+                    },
+                    {
+                        "field": "store_credit_offered",
+                        "operator": "not_equals",
+                        "value": true
+                    }
+                ]
+            },
+            "action": "respond",
+            "policy_applied": "offer_store_credit_with_bonus",
+            "response_template": "No problem! We can offer you store credit for the item value plus a 10% bonus for the inconvenience. The credit is available immediately at checkout.\n\nWould you like to go with store credit?",
+            "set_context": {
+                "store_credit_offered": true
+            }
+        },
+        {
+            "id": "accept_store_credit",
+            "condition": {
+                "all": [
+                    {
+                        "field": "store_credit_offered",
                         "operator": "equals",
-                        "value": "store_credit"
+                        "value": true
+                    },
+                    {
+                        "field": "customer_resolution_preference",
+                        "operator": "equals",
+                        "value": "STORE_CREDIT"
                     }
                 ]
             },
             "action": "call_tool",
-            "policy_applied": "store_credit_10_percent_bonus",
+            "policy_applied": "issue_store_credit",
             "tool_plan": [
                 {
                     "tool_name": "shopify_create_store_credit",
                     "params_source": {
-                        "customer_id": "context.customer_id",
-                        "amount": "context.order_total",
-                        "bonus_percent": 10,
-                        "reason": "Wrong/missing item resolution - store credit with 10% bonus"
+                        "id": "context.customer_id",
+                        "creditAmount": {
+                            "amount": "context.item_value_with_bonus",
+                            "currencyCode": "USD"
+                        },
+                        "expiresAt": null
+                    }
+                },
+                {
+                    "tool_name": "shopify_add_tags",
+                    "params_source": {
+                        "id": "context.order_id",
+                        "tags": [
+                            "Wrong or Missing",
+                            "Store Credit Issued"
+                        ]
                     }
                 }
             ],
-            "response_template": "We've issued store credit for the full value of your order plus a 10% bonus for the inconvenience. The credit is available immediately in your account."
+            "response_template": "Done! We've issued store credit for the full value of your item plus a 10% bonus. The credit is available immediately in your account and can be used at checkout.",
+            "set_context": {
+                "customer_resolution_preference": "STORE_CREDIT"
+            }
         },
         {
-            "id": "wrong_missing_cash_refund",
+            "id": "process_cash_refund",
             "condition": {
                 "all": [
                     {
-                        "field": "evidence_complete",
+                        "field": "store_credit_offered",
                         "operator": "equals",
                         "value": true
                     },
                     {
-                        "field": "customer_preference",
+                        "field": "customer_resolution_preference",
                         "operator": "equals",
-                        "value": "refund"
+                        "value": "CASH_REFUND"
                     }
                 ]
             },
             "action": "call_tool",
-            "policy_applied": "cash_refund_last_resort",
+            "policy_applied": "process_cash_refund",
             "tool_plan": [
                 {
                     "tool_name": "shopify_refund_order",
                     "params_source": {
-                        "order_id": "context.order_id",
-                        "reason": "Wrong/missing item - customer requested cash refund"
+                        "orderId": "context.order_gid",
+                        "refundMethod": "ORIGINAL_PAYMENT_METHODS"
+                    }
+                },
+                {
+                    "tool_name": "shopify_add_tags",
+                    "params_source": {
+                        "id": "context.order_id",
+                        "tags": [
+                            "Wrong or Missing",
+                            "Cash Refund Issued"
+                        ]
                     }
                 }
             ],
-            "response_template": "We've processed a full refund for your order. Please allow 5-7 business days for the refund to appear in your account."
+            "response_template": "We've processed a full refund for the item. The refund will go back to your original payment method within 5-7 business days.\n\nIs there anything else I can help you with?"
+        },
+        {
+            "id": "waiting_for_photos",
+            "condition": {
+                "all": [
+                    {
+                        "field": "photos_requested",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "photos_received",
+                        "operator": "not_equals",
+                        "value": true
+                    }
+                ]
+            },
+            "action": "respond",
+            "policy_applied": "remind_photos",
+            "response_template": "Just a reminder - whenever you're ready, please send those photos so we can get this resolved for you quickly."
         }
     ],
     "default_action": {

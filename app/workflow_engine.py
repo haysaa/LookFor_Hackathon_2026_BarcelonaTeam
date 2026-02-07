@@ -77,12 +77,7 @@ class WorkflowEngine:
         # Evaluate rules in order
         for rule in workflow.get("rules", []):
             if self._evaluate_condition(rule.get("condition", {}), context):
-                # Check for policy override BEFORE building decision
-                workflow_name = workflow.get("workflow_name", intent)
-                rule_id = rule.get("id", "unknown")
-                
-                decision = self._build_decision(workflow, rule, context, workflow_name, rule_id)
-                return decision
+                return self._build_decision(workflow, rule, context)
         
         # No rules matched - default respond
         return {
@@ -102,21 +97,71 @@ class WorkflowEngine:
         if hasattr(session, 'case_context'):
             cc = session.case_context
             ctx['order_id'] = getattr(cc, 'order_id', None)
+            ctx['order_status'] = getattr(cc, 'order_status', None)
             ctx['tracking_number'] = getattr(cc, 'tracking_number', None)
+            ctx['tracking_url'] = getattr(cc, 'tracking_url', None)
             ctx['item_name'] = getattr(cc, 'item_name', None)
             ctx['order_date'] = getattr(cc, 'order_date', None)
             ctx['shipping_status'] = getattr(cc, 'shipping_status', None)
-            ctx['contact_day'] = getattr(cc, 'contact_day', None)
             ctx['refund_reason'] = getattr(cc, 'refund_reason', None)
             ctx['promise_given'] = getattr(cc, 'promise_given', None)
             ctx['item_photo'] = getattr(cc, 'item_photo', None)
             ctx['packing_slip'] = getattr(cc, 'packing_slip', None)
+            ctx['orders_fetched'] = getattr(cc, 'extra', {}).get('orders_fetched', None)
+            ctx['tracking_requested'] = getattr(cc, 'extra', {}).get('tracking_requested', None)
+            
+            # WISMO fields
+            ctx['wismo_promise_type'] = getattr(cc, 'wismo_promise_type', None)
+            ctx['wismo_promise_deadline'] = getattr(cc, 'wismo_promise_deadline', None)
+            ctx['wismo_promise_set_at'] = getattr(cc, 'wismo_promise_set_at', None)
+            
+            # Wrong/Missing fields
+            ctx['wrong_missing_type'] = getattr(cc, 'wrong_missing_type', None)
+            ctx['photos_requested'] = getattr(cc, 'photos_requested', False)
+            ctx['photos_received'] = getattr(cc, 'photos_received', False)
+            ctx['reship_offered'] = getattr(cc, 'reship_offered', False)
+            ctx['store_credit_offered'] = getattr(cc, 'store_credit_offered', False)
+            ctx['customer_resolution_preference'] = getattr(cc, 'customer_resolution_preference', None)
+            
+            # Refund workflow fields
+            ctx['refund_reason'] = getattr(cc, 'refund_reason', None)
+            ctx['expectation_cause'] = getattr(cc, 'expectation_cause', None)
+            ctx['usage_tip_sent'] = getattr(cc, 'usage_tip_sent', False)
+            ctx['swap_offered'] = getattr(cc, 'swap_offered', False)
+            ctx['refund_store_credit_offered'] = getattr(cc, 'refund_store_credit_offered', False)
+            ctx['refund_shipping_promise_type'] = getattr(cc, 'refund_shipping_promise_type', None)
+            ctx['refund_shipping_promise_deadline'] = getattr(cc, 'refund_shipping_promise_deadline', None)
+            ctx['refund_shipping_wait_asked'] = getattr(cc, 'refund_shipping_wait_asked', False)
+            ctx['customer_wait_acceptance'] = getattr(cc, 'customer_wait_acceptance', None)
+            ctx['replacement_offered'] = getattr(cc, 'replacement_offered', False)
+            ctx['customer_resolution_choice'] = getattr(cc, 'customer_resolution_choice', None)
+            
+            # Auto-compute contact_day if not set
+            contact_day = getattr(cc, 'contact_day', None)
+            if not contact_day:
+                try:
+                    from app.wismo_helpers import get_contact_day
+                    contact_day = get_contact_day(session)
+                except ImportError:
+                    pass
+            ctx['contact_day'] = contact_day
+            
+            # Compute deadline_passed dynamically
+            deadline = getattr(cc, 'wismo_promise_deadline', None)
+            if deadline:
+                try:
+                    from app.wismo_helpers import is_promise_deadline_passed
+                    ctx['wismo_promise_deadline_passed'] = is_promise_deadline_passed(deadline)
+                except ImportError:
+                    ctx['wismo_promise_deadline_passed'] = False
+            else:
+                ctx['wismo_promise_deadline_passed'] = False
         
         # Customer info
         if hasattr(session, 'customer_info'):
             ci = session.customer_info
             ctx['customer_id'] = getattr(ci, 'shopify_customer_id', None)
-            ctx['customer_email'] = getattr(ci, 'email', None)
+            ctx['customer_email'] = getattr(ci, 'customer_email', None)
         
         return ctx
     
@@ -146,7 +191,7 @@ class WorkflowEngine:
         if operator == "is_null":
             return actual is None or actual == ""
         
-        if operator == "is_not_null":
+        if operator == "is_not_null" or operator == "not_null":
             return actual is not None and actual != ""
         
         if operator == "equals":
@@ -166,20 +211,13 @@ class WorkflowEngine:
         
         return False
     
-    
-    def _build_decision(self, workflow: dict, rule: dict, context: dict, workflow_name: str, rule_id: str) -> dict:
-        """Build a decision dict from a matched rule, applying policy overrides if exists."""
+    def _build_decision(self, workflow: dict, rule: dict, context: dict) -> dict:
+        """Build a decision dict from a matched rule."""
         action = rule.get("action", "respond")
         
-        # CHECK FOR POLICY OVERRIDE
-        from app.policy_overrides import get_policy_store
-        
-        policy_store = get_policy_store()
-        override = policy_store.get_override(workflow_name, rule_id)
-        
-        # Build base decision
         decision = {
-            "workflow_id": workflow_name,
+            "workflow_id": workflow.get("workflow_name", "UNKNOWN"),
+            "rule_id": rule.get("id", "unknown"),
             "next_action": action,
             "policy_applied": [rule.get("policy_applied", rule.get("id", "unknown"))],
             "required_fields_missing": [],
@@ -187,35 +225,12 @@ class WorkflowEngine:
             "response_template": None,
             "clarifying_questions": [],
             "escalation_reason": None,
-            "policy_override_applied": False
+            "escalation_priority": rule.get("priority", "medium"),
+            "set_context": rule.get("set_context", {}),
+            "add_tags": rule.get("add_tags", [])
         }
         
-        # APPLY OVERRIDE IF EXISTS
-        if override and override.active:
-            # Override the action
-            action = override.override_action
-            decision["next_action"] = action
-            decision["policy_override_applied"] = True
-            decision["override_id"] = override.override_id
-            
-            # Apply context updates (e.g., NEEDS_ATTENTION: true)
-            if override.context_updates:
-                for key, value in override.context_updates.items():
-                    context[key] = value
-                decision["context_updates_applied"] = override.context_updates
-            
-            # Override escalation reason if provided
-            if override.escalation_reason:
-                decision["escalation_reason"] = override.escalation_reason
-            
-            # Override response template if provided
-            if override.response_template_override:
-                decision["response_template"] = override.response_template_override
-            
-            # Log override in trace (will be picked up by orchestrator)
-            decision["trace_note"] = f"Policy override '{override.override_id}' applied: {override.original_prompt[:100]}"
-        
-        # Handle specific actions (with potential override modifications)
+        # Handle specific actions
         if action == "ask_clarifying":
             response = rule.get("response", {})
             decision["clarifying_questions"] = response.get("clarifying_questions", [])
@@ -230,15 +245,11 @@ class WorkflowEngine:
                 resolved_params = {}
                 params_source = tp.get("params_source", {})
                 for param_name, source in params_source.items():
-                    if source.startswith("context."):
+                    if isinstance(source, str) and source.startswith("context."):
                         ctx_field = source.replace("context.", "")
                         resolved_params[param_name] = context.get(ctx_field)
                     else:
                         resolved_params[param_name] = source
-                
-                # Apply tool param overrides if exists
-                if override and override.tool_param_overrides:
-                    resolved_params.update(override.tool_param_overrides)
                 
                 decision["tool_plan"].append({
                     "tool_name": tp.get("tool_name"),
@@ -246,12 +257,20 @@ class WorkflowEngine:
                 })
         
         elif action == "respond":
-            if not decision["response_template"]:  # Only if not overridden
-                decision["response_template"] = rule.get("response_template")
+            decision["response_template"] = rule.get("response_template")
+            # Interpolate context values in template
+            if decision["response_template"]:
+                for key, value in context.items():
+                    if value is not None:
+                        decision["response_template"] = decision["response_template"].replace(
+                            f"{{{key}}}", str(value)
+                        )
         
         elif action == "escalate":
-            if not decision["escalation_reason"]:  # Only if not overridden
-                decision["escalation_reason"] = rule.get("escalation_reason", "Rule triggered escalation")
+            decision["escalation_reason"] = rule.get("escalation_reason", "Rule triggered escalation")
+            # Include response_template for escalation messages (e.g., Monica loop-in)
+            if rule.get("response_template"):
+                decision["response_template"] = rule.get("response_template")
         
         return decision
 

@@ -70,10 +70,12 @@ class CaseContext(BaseModel):
     """Context extracted during conversation for workflow decisions."""
     order_id: Optional[str] = None
     tracking_number: Optional[str] = None
+    tracking_url: Optional[str] = None  # Tracking URL from carrier
     item_name: Optional[str] = None
     refund_reason: Optional[str] = None
     order_date: Optional[str] = None
     shipping_status: Optional[str] = None
+    order_status: Optional[str] = None  # Shopify order status
     evidence: dict[str, bool] = Field(default_factory=lambda: {
         "item_photo": False,
         "packing_slip": False,
@@ -82,6 +84,30 @@ class CaseContext(BaseModel):
     promise_given: bool = False
     promise_date: Optional[str] = None
     contact_day: Optional[str] = None  # Mon, Tue, Wed, etc.
+    # WISMO promise tracking
+    wismo_promise_type: Optional[str] = None      # FRIDAY | EARLY_NEXT_WEEK
+    wismo_promise_deadline: Optional[str] = None  # ISO date (YYYY-MM-DD)
+    wismo_promise_set_at: Optional[str] = None    # ISO timestamp
+    # Wrong/Missing item tracking
+    wrong_missing_type: Optional[str] = None      # MISSING_ITEM | WRONG_ITEM
+    photos_requested: bool = False
+    photos_received: bool = False
+    reship_offered: bool = False
+    store_credit_offered: bool = False
+    customer_resolution_preference: Optional[str] = None  # RESHIP | STORE_CREDIT | CASH_REFUND
+    # Refund workflow fields
+    expectation_cause: Optional[str] = None  # falling_asleep|staying_asleep|comfort|taste|no_effect
+    usage_tip_sent: bool = False
+    swap_offered: bool = False
+    refund_store_credit_offered: bool = False
+    # Refund shipping delay fields
+    refund_shipping_promise_type: Optional[str] = None  # FRIDAY | EARLY_NEXT_WEEK
+    refund_shipping_promise_deadline: Optional[str] = None  # ISO date
+    refund_shipping_wait_asked: bool = False
+    customer_wait_acceptance: Optional[str] = None  # ACCEPTED | DECLINED
+    # Refund resolution fields
+    replacement_offered: bool = False
+    customer_resolution_choice: Optional[str] = None  # REPLACEMENT | STORE_CREDIT | REFUND | SWAP
     extra: dict[str, Any] = Field(default_factory=dict)
 
 

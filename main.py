@@ -23,12 +23,11 @@ app = FastAPI(
 @app.on_event("startup")
 async def startup_event():
     """Initialize application state on startup."""
-    from app.tickets import load_dummy_fixtures, ticket_store
+    from app.tickets import load_tickets_from_config, ticket_store
     
-    # Load dummy tickets
-    count = load_dummy_fixtures()
-    print(f"Loaded {count} tickets into TicketStore")
-    print(f"Total tickets: {ticket_store.count()}")
+    # Load tickets (TICKETS_PATH env var or dummy fallback)
+    count = load_tickets_from_config()
+    print(f"Total tickets in store: {ticket_store.count()}")
 
 # CORS middleware (for demo/testing)
 app.add_middleware(

@@ -1,40 +1,93 @@
 {
     "workflow_name": "WISMO",
-    "version": "2.0",
-    "description": "Where Is My Order - Handles shipping delay inquiries with day-based promise logic",
-    "required_fields": [
-        "order_id"
-    ],
+    "version": "3.0",
+    "description": "Where Is My Order - Complete shipping delay workflow with day-based promise logic",
+    "required_fields": [],
     "optional_fields": [
+        "order_id",
         "order_date",
         "shipping_status",
         "tracking_number",
-        "contact_day"
+        "tracking_url",
+        "contact_day",
+        "wismo_promise_type",
+        "wismo_promise_deadline",
+        "wismo_promise_set_at"
     ],
     "tools_available": [
-        "shopify_get_order_details"
+        "shopify_get_customer_orders",
+        "shopify_get_order_details",
+        "shopify_add_tags"
     ],
     "priority": 1,
     "rules": [
         {
-            "id": "wismo_missing_order_id",
+            "id": "wismo_fetch_orders_by_email",
+            "description": "First, fetch customer orders if we don't have order info",
             "condition": {
-                "field": "order_id",
-                "operator": "is_null"
+                "all": [
+                    {
+                        "field": "order_id",
+                        "operator": "is_null"
+                    },
+                    {
+                        "field": "orders_fetched",
+                        "operator": "is_null"
+                    }
+                ]
+            },
+            "action": "call_tool",
+            "policy_applied": "fetch_customer_orders",
+            "tool_plan": [
+                {
+                    "tool_name": "shopify_get_customer_orders",
+                    "params_source": {
+                        "customer_id": "context.customer_id"
+                    }
+                }
+            ],
+            "set_context": {
+                "orders_fetched": true
+            }
+        },
+        {
+            "id": "wismo_no_orders_found",
+            "description": "No orders found for customer, ask for order ID",
+            "condition": {
+                "all": [
+                    {
+                        "field": "orders_fetched",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "order_id",
+                        "operator": "is_null"
+                    }
+                ]
             },
             "action": "ask_clarifying",
             "policy_applied": "require_order_id",
             "response": {
                 "clarifying_questions": [
-                    "Can you please provide your order number so I can check the status?"
+                    "I couldn't find any recent orders with your email. Could you please provide your order number? You can find it in your order confirmation email (e.g., #12345 or ORD-12345)."
                 ]
             }
         },
         {
-            "id": "wismo_need_status_check",
+            "id": "wismo_fetch_order_details",
+            "description": "Fetch order details if we have order_id but no status",
             "condition": {
-                "field": "shipping_status",
-                "operator": "is_null"
+                "all": [
+                    {
+                        "field": "order_id",
+                        "operator": "is_not_null"
+                    },
+                    {
+                        "field": "shipping_status",
+                        "operator": "is_null"
+                    }
+                ]
             },
             "action": "call_tool",
             "policy_applied": "fetch_order_status",
@@ -48,7 +101,60 @@
             ]
         },
         {
-            "id": "wismo_already_delivered",
+            "id": "wismo_tracking_request",
+            "description": "Customer specifically asks for tracking - provide if available",
+            "condition": {
+                "all": [
+                    {
+                        "field": "tracking_requested",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "tracking_url",
+                        "operator": "is_not_null"
+                    }
+                ]
+            },
+            "action": "respond",
+            "policy_applied": "provide_tracking",
+            "response_template": "Here's your tracking link: {tracking_url}. You can use this to see the latest shipping updates for your order."
+        },
+        {
+            "id": "wismo_tracking_not_available",
+            "description": "Customer asks for tracking but it's not available yet",
+            "condition": {
+                "all": [
+                    {
+                        "field": "tracking_requested",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "tracking_url",
+                        "operator": "is_null"
+                    }
+                ]
+            },
+            "action": "respond",
+            "policy_applied": "tracking_not_ready",
+            "response_template": "Tracking information isn't available for your order yet. This usually means the package is still being prepared for shipment. We'll send you a tracking link as soon as it's available."
+        },
+        {
+            "id": "wismo_status_unfulfilled",
+            "description": "Order not yet shipped",
+            "condition": {
+                "field": "shipping_status",
+                "operator": "equals",
+                "value": "unfulfilled"
+            },
+            "action": "respond",
+            "policy_applied": "order_not_shipped",
+            "response_template": "Your order hasn't shipped yet. It's currently being prepared in our warehouse. You'll receive an email with tracking information once it's on its way."
+        },
+        {
+            "id": "wismo_status_delivered",
+            "description": "Order marked as delivered",
             "condition": {
                 "field": "shipping_status",
                 "operator": "equals",
@@ -56,10 +162,55 @@
             },
             "action": "respond",
             "policy_applied": "order_delivered",
-            "response_template": "Good news! Our records show your order was delivered. If you haven't received it, please check with neighbors or your building reception."
+            "response_template": "Great news! Our records show your order has been delivered. If you haven't received it, please check with neighbors, your building reception, or any safe spots where packages might have been left. If you still can't find it, please let us know and we'll help resolve this."
+        },
+        {
+            "id": "wismo_status_unknown_escalate",
+            "description": "Status cannot be interpreted - escalate for uncertainty",
+            "condition": {
+                "field": "shipping_status",
+                "operator": "equals",
+                "value": "unknown"
+            },
+            "action": "escalate",
+            "policy_applied": "status_unclear",
+            "escalation_reason": "WISMO: Order status cannot be interpreted, requires human review",
+            "priority": "medium"
+        },
+        {
+            "id": "wismo_post_promise_deadline_passed",
+            "description": "Customer contacts after promise deadline and order still not delivered - escalate",
+            "condition": {
+                "all": [
+                    {
+                        "field": "wismo_promise_type",
+                        "operator": "is_not_null"
+                    },
+                    {
+                        "field": "wismo_promise_deadline_passed",
+                        "operator": "equals",
+                        "value": true
+                    },
+                    {
+                        "field": "shipping_status",
+                        "operator": "not_equals",
+                        "value": "delivered"
+                    }
+                ]
+            },
+            "action": "escalate",
+            "policy_applied": "post_promise_escalation",
+            "escalation_reason": "WISMO promised date passed; requires human to process resend",
+            "priority": "high",
+            "add_tags": [
+                "WISMO",
+                "PROMISE_EXPIRED",
+                "ESCALATED"
+            ]
         },
         {
             "id": "wismo_mon_wed_promise",
+            "description": "In transit, contacted Mon-Wed: promise until Friday",
             "condition": {
                 "all": [
                     {
@@ -72,28 +223,31 @@
                         ]
                     },
                     {
-                        "field": "promise_given",
+                        "field": "wismo_promise_type",
                         "operator": "is_null"
                     },
                     {
                         "field": "shipping_status",
-                        "operator": "not_equals",
-                        "value": "delivered"
+                        "operator": "equals",
+                        "value": "in_transit"
                     }
                 ]
             },
             "action": "respond",
             "policy_applied": "friday_promise",
-            "response_templates": {
-                "en": "Your order is on its way! Based on current shipping updates, your package will arrive by Friday. We'll keep tracking it for you.",
-                "tr": "Siparişiniz Cuma gününe kadar size ulaşacaktır. Anlayışınız için teşekkür ederiz."
-            },
+            "response_template": "Your order is on its way! Based on current shipping updates, your package should arrive by Friday. If it doesn't arrive by then, please let us know and we'll arrange a free resend for you.",
             "set_context": {
-                "promise_given": "friday"
-            }
+                "wismo_promise_type": "FRIDAY",
+                "promise_given": true
+            },
+            "add_tags": [
+                "WISMO",
+                "PROMISE_SET"
+            ]
         },
         {
             "id": "wismo_thu_sun_promise",
+            "description": "In transit, contacted Thu-Sun: promise until early next week",
             "condition": {
                 "all": [
                     {
@@ -107,50 +261,58 @@
                         ]
                     },
                     {
-                        "field": "promise_given",
+                        "field": "wismo_promise_type",
                         "operator": "is_null"
                     },
                     {
                         "field": "shipping_status",
-                        "operator": "not_equals",
-                        "value": "delivered"
+                        "operator": "equals",
+                        "value": "in_transit"
                     }
                 ]
             },
             "action": "respond",
             "policy_applied": "next_week_promise",
-            "response_templates": {
-                "en": "Your order is on its way! Based on current shipping updates, your package will arrive early next week. We'll keep tracking it for you.",
-                "tr": "Siparişiniz önümüzdeki hafta başında size ulaşacaktır. Anlayışınız için teşekkür ederiz."
-            },
+            "response_template": "Your order is on its way! Based on current shipping updates, your package should arrive early next week. If it doesn't arrive by then, please let us know and we'll arrange a free resend for you.",
             "set_context": {
-                "promise_given": "next_week"
-            }
+                "wismo_promise_type": "EARLY_NEXT_WEEK",
+                "promise_given": true
+            },
+            "add_tags": [
+                "WISMO",
+                "PROMISE_SET"
+            ]
         },
         {
-            "id": "wismo_post_promise_escalation",
+            "id": "wismo_already_promised_still_waiting",
+            "description": "Promise was given, still in transit, deadline not yet passed",
             "condition": {
                 "all": [
                     {
-                        "field": "promise_given",
+                        "field": "wismo_promise_type",
                         "operator": "is_not_null"
                     },
                     {
-                        "field": "shipping_status",
+                        "field": "wismo_promise_deadline_passed",
                         "operator": "not_equals",
-                        "value": "delivered"
+                        "value": true
+                    },
+                    {
+                        "field": "shipping_status",
+                        "operator": "equals",
+                        "value": "in_transit"
                     }
                 ]
             },
-            "action": "escalate",
-            "policy_applied": "post_promise_escalation",
-            "escalation_reason": "Delivery promise exceeded - customer contacted after promise date but order still not delivered",
-            "priority": "high"
+            "action": "respond",
+            "policy_applied": "reconfirm_promise",
+            "response_template": "We understand you're waiting for your order. According to our records, your package is still on its way and should arrive as promised. We're keeping an eye on it for you. Thank you for your patience!"
         }
     ],
     "default_action": {
         "action": "escalate",
         "policy_applied": "unhandled_wismo_case",
-        "escalation_reason": "WISMO case did not match any defined rules"
+        "escalation_reason": "WISMO case did not match any defined rules",
+        "priority": "medium"
     }
 }
