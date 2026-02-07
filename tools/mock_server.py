@@ -1,9 +1,9 @@
 """
 Mock Tool Server
-Version: 1.0
+Version: 2.0 - Official Hackathon Spec
 Developer: Dev B
 
-Provides mock responses for tools before real endpoints are available.
+Provides mock responses for all 18 official tools before real endpoints are available.
 All responses follow the standard contract: {success: bool, data: {}, error: ""}
 """
 from typing import Dict, Any, Optional
@@ -14,9 +14,9 @@ import string
 
 class MockToolServer:
     """
-    Mock implementation of tool endpoints for testing.
+    Mock implementation of all 18 official hackathon tool endpoints.
     
-    Returns realistic mock data following the tool catalog schemas.
+    Returns realistic mock data following the official tool specification schemas.
     Set fail_rate > 0 to simulate random failures for retry testing.
     """
     
@@ -29,40 +29,49 @@ class MockToolServer:
         """
         self.fail_rate = fail_rate
         self._order_db = self._init_mock_orders()
+        self._subscription_db = self._init_mock_subscriptions()
     
     def _init_mock_orders(self) -> Dict[str, dict]:
-        """Initialize mock order database."""
+        """Initialize mock order database with Shopify GID format."""
         return {
-            "12345": {
-                "order_id": "12345",
-                "status": "shipped",
-                "order_date": "2026-02-01",
-                "shipping_carrier": "FedEx",
-                "tracking_number": "FX123456789",
-                "estimated_delivery": "2026-02-07",
-                "customer_id": "cust_abc123",
-                "total_amount": 99.99
+            "#12345": {
+                "id": "gid://shopify/Order/5531567751245",
+                "name": "#12345",
+                "createdAt": "2026-02-01T10:00:00Z",
+                "status": "FULFILLED",
+                "trackingUrl": "https://tracking.fedex.com/abc123"
             },
-            "54321": {
-                "order_id": "54321",
-                "status": "delivered",
-                "order_date": "2026-01-25",
-                "shipping_carrier": "UPS",
-                "tracking_number": "UP987654321",
-                "estimated_delivery": "2026-01-30",
-                "customer_id": "cust_xyz789",
-                "total_amount": 149.99
+            "#54321": {
+                "id": "gid://shopify/Order/5531567751246",
+                "name": "#54321",
+                "createdAt": "2026-01-25T14:30:00Z",
+                "status": "DELIVERED",
+                "trackingUrl": "https://tracking.ups.com/xyz789"
             },
-            "99999": {
-                "order_id": "99999",
-                "status": "processing",
-                "order_date": "2026-02-05",
-                "shipping_carrier": None,
-                "tracking_number": None,
-                "estimated_delivery": "2026-02-10",
-                "customer_id": "cust_test001",
-                "total_amount": 49.99
+            "#99999": {
+                "id": "gid://shopify/Order/5531567751247",
+                "name": "#99999",
+                "createdAt": "2026-02-05T09:15:00Z",
+                "status": "UNFULFILLED",
+                "trackingUrl": None
             }
+        }
+    
+    def _init_mock_subscriptions(self) -> Dict[str, dict]:
+        """Initialize mock subscription database."""
+        return {
+            "customer@example.com": [
+                {
+                    "status": "ACTIVE",
+                    "subscriptionId": "sub_124",
+                    "nextBillingDate": "2026-03-01"
+                },
+                {
+                    "status": "PAUSED",
+                    "subscriptionId": "sub_123",
+                    "nextBillingDate": "2026-05-01"
+                }
+            ]
         }
     
     def _should_fail(self) -> bool:
@@ -95,11 +104,26 @@ class MockToolServer:
         
         # Route to appropriate handler
         handlers = {
-            "check_order_status": self._check_order_status,
-            "get_shipping_info": self._get_shipping_info,
-            "issue_store_credit": self._issue_store_credit,
-            "process_refund": self._process_refund,
-            "request_reship": self._request_reship
+            # Shopify tools
+            "shopify_add_tags": self._shopify_add_tags,
+            "shopify_cancel_order": self._shopify_cancel_order,
+            "shopify_create_discount_code": self._shopify_create_discount_code,
+            "shopify_create_return": self._shopify_create_return,
+            "shopify_create_store_credit": self._shopify_create_store_credit,
+            "shopify_get_collection_recommendations": self._shopify_get_collection_recommendations,
+            "shopify_get_customer_orders": self._shopify_get_customer_orders,
+            "shopify_get_order_details": self._shopify_get_order_details,
+            "shopify_get_product_details": self._shopify_get_product_details,
+            "shopify_get_product_recommendations": self._shopify_get_product_recommendations,
+            "shopify_get_related_knowledge_source": self._shopify_get_related_knowledge_source,
+            "shopify_refund_order": self._shopify_refund_order,
+            "shopify_update_order_shipping_address": self._shopify_update_order_shipping_address,
+            # Skio tools
+            "skio_cancel_subscription": self._skio_cancel_subscription,
+            "skio_get_subscription_status": self._skio_get_subscription_status,
+            "skio_pause_subscription": self._skio_pause_subscription,
+            "skio_skip_next_order_subscription": self._skio_skip_next_order_subscription,
+            "skio_unpause_subscription": self._skio_unpause_subscription
         }
         
         handler = handlers.get(tool_name)
@@ -124,87 +148,178 @@ class MockToolServer:
                 "error": str(e)
             }
     
-    def _check_order_status(self, params: Dict[str, Any]) -> dict:
-        """Mock check_order_status tool."""
-        order_id = params.get("order_id", "").replace("#", "").replace("ORD-", "")
+    # ==================== SHOPIFY MOCK HANDLERS ====================
+    
+    def _shopify_add_tags(self, params: Dict[str, Any]) -> dict:
+        """Mock shopify_add_tags - always succeeds."""
+        return {}
+    
+    def _shopify_cancel_order(self, params: Dict[str, Any]) -> dict:
+        """Mock shopify_cancel_order - always succeeds."""
+        return {}
+    
+    def _shopify_create_discount_code(self, params: Dict[str, Any]) -> dict:
+        """Mock shopify_create_discount_code - returns discount code."""
+        return {
+            "code": f"DISCOUNT_LF_{self._generate_id().upper()}"
+        }
+    
+    def _shopify_create_return(self, params: Dict[str, Any]) -> dict:
+        """Mock shopify_create_return - always succeeds."""
+        return {}
+    
+    def _shopify_create_store_credit(self, params: Dict[str, Any]) -> dict:
+        """Mock shopify_create_store_credit - returns account info."""
+        credit_amount = params.get("creditAmount", {})
+        amount = credit_amount.get("amount", "0.00")
+        currency = credit_amount.get("currencyCode", "USD")
         
-        if order_id in self._order_db:
-            order = self._order_db[order_id]
-            return {
-                "order_id": order["order_id"],
-                "status": order["status"],
-                "order_date": order["order_date"],
-                "shipping_carrier": order["shipping_carrier"],
-                "tracking_number": order["tracking_number"],
-                "estimated_delivery": order["estimated_delivery"]
+        # Mock balance calculation (current balance + new credit)
+        new_balance = float(amount) * 1.5  # Mock existing balance
+        
+        return {
+            "storeCreditAccountId": f"gid://shopify/StoreCreditAccount/{self._generate_id()}",
+            "credited": {
+                "amount": amount,
+                "currencyCode": currency
+            },
+            "newBalance": {
+                "amount": f"{new_balance:.2f}",
+                "currencyCode": currency
             }
+        }
+    
+    def _shopify_get_collection_recommendations(self, params: Dict[str, Any]) -> list:
+        """Mock shopify_get_collection_recommendations - returns collections."""
+        return [
+            {
+                "id": "gid://shopify/Collection/1",
+                "title": "Acne Care",
+                "handle": "acne-care"
+            },
+            {
+                "id": "gid://shopify/Collection/2",
+                "title": "Sleep Aid",
+                "handle": "sleep-aid"
+            }
+        ]
+    
+    def _shopify_get_customer_orders(self, params: Dict[str, Any]) -> dict:
+        """Mock shopify_get_customer_orders - returns order list."""
+        return {
+            "orders": [
+                {
+                    "id": "gid://shopify/Order/1",
+                    "name": "#1001",
+                    "createdAt": "2026-02-06T01:06:46Z",
+                    "status": "FULFILLED",
+                    "trackingUrl": "https://tracking.example.com/abc123"
+                },
+                {
+                    "id": "gid://shopify/Order/2",
+                    "name": "#1002",
+                    "createdAt": "2026-01-15T14:20:00Z",
+                    "status": "DELIVERED",
+                    "trackingUrl": "https://tracking.example.com/def456"
+                }
+            ],
+            "hasNextPage": False,
+            "endCursor": None
+        }
+    
+    def _shopify_get_order_details(self, params: Dict[str, Any]) -> dict:
+        """Mock shopify_get_order_details - returns order details."""
+        order_id = params.get("orderId", "")
+        
+        # Check if we have this order in our mock DB
+        if order_id in self._order_db:
+            return self._order_db[order_id]
         
         # Return generic mock for unknown orders
         return {
-            "order_id": order_id,
-            "status": "shipped",
-            "order_date": (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d"),
-            "shipping_carrier": "Standard Shipping",
-            "tracking_number": f"TRK{order_id}",
-            "estimated_delivery": (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
+            "id": f"gid://shopify/Order/{self._generate_id()}",
+            "name": order_id,
+            "createdAt": (datetime.now() - timedelta(days=3)).isoformat() + "Z",
+            "status": "FULFILLED",
+            "trackingUrl": f"https://tracking.example.com/{self._generate_id()}"
         }
     
-    def _get_shipping_info(self, params: Dict[str, Any]) -> dict:
-        """Mock get_shipping_info tool."""
-        tracking = params.get("tracking_number", "")
-        
+    def _shopify_get_product_details(self, params: Dict[str, Any]) -> list:
+        """Mock shopify_get_product_details - returns product array."""
+        return [
+            {
+                "id": "gid://shopify/Product/9",
+                "title": "Patch",
+                "handle": "patch"
+            }
+        ]
+    
+    def _shopify_get_product_recommendations(self, params: Dict[str, Any]) -> list:
+        """Mock shopify_get_product_recommendations - returns product array."""
+        return [
+            {
+                "id": "gid://shopify/Product/9",
+                "title": "Patch",
+                "handle": "patch"
+            },
+            {
+                "id": "gid://shopify/Product/10",
+                "title": "Sleep Strips",
+                "handle": "sleep-strips"
+            }
+        ]
+    
+    def _shopify_get_related_knowledge_source(self, params: Dict[str, Any]) -> dict:
+        """Mock shopify_get_related_knowledge_source - returns knowledge sources."""
         return {
-            "tracking_number": tracking,
-            "carrier": "FedEx",
-            "current_status": "In Transit",
-            "last_location": "Distribution Center, Istanbul",
-            "estimated_delivery": (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d"),
-            "delivery_attempts": 0
+            "faqs": [],
+            "pdfs": [],
+            "blogArticles": [],
+            "pages": []
         }
     
-    def _issue_store_credit(self, params: Dict[str, Any]) -> dict:
-        """Mock issue_store_credit tool."""
-        customer_id = params.get("customer_id", "unknown")
-        amount = params.get("amount", 0)
-        bonus = params.get("bonus_percent", 0)
-        
-        total = amount * (1 + bonus / 100)
-        
-        return {
-            "credit_id": self._generate_id("cr_"),
-            "customer_id": customer_id,
-            "total_amount": round(total, 2),
-            "expires_at": (datetime.now() + timedelta(days=365)).isoformat()
-        }
+    def _shopify_refund_order(self, params: Dict[str, Any]) -> dict:
+        """Mock shopify_refund_order - always succeeds."""
+        return {}
     
-    def _process_refund(self, params: Dict[str, Any]) -> dict:
-        """Mock process_refund tool."""
-        order_id = params.get("order_id", "").replace("#", "").replace("ORD-", "")
-        
-        # Get order amount if known
-        amount = params.get("amount")
-        if amount is None and order_id in self._order_db:
-            amount = self._order_db[order_id]["total_amount"]
-        elif amount is None:
-            amount = 50.00  # Default mock amount
-        
-        return {
-            "refund_id": self._generate_id("ref_"),
-            "order_id": order_id,
-            "amount": amount,
-            "status": "processing",
-            "estimated_processing_days": 5
-        }
+    def _shopify_update_order_shipping_address(self, params: Dict[str, Any]) -> dict:
+        """Mock shopify_update_order_shipping_address - always succeeds."""
+        return {}
     
-    def _request_reship(self, params: Dict[str, Any]) -> dict:
-        """Mock request_reship tool - always requires approval."""
-        order_id = params.get("order_id", "").replace("#", "").replace("ORD-", "")
+    # ==================== SKIO MOCK HANDLERS ====================
+    
+    def _skio_cancel_subscription(self, params: Dict[str, Any]) -> dict:
+        """Mock skio_cancel_subscription - always succeeds."""
+        return {}
+    
+    def _skio_get_subscription_status(self, params: Dict[str, Any]) -> list:
+        """Mock skio_get_subscription_status - returns subscriptions."""
+        email = params.get("email", "")
         
-        return {
-            "reship_request_id": self._generate_id("rs_"),
-            "status": "pending_approval",
-            "requires_manual_review": True
-        }
+        # Check if we have subscriptions for this customer
+        if email in self._subscription_db:
+            return self._subscription_db[email]
+        
+        # Return mock subscription
+        return [
+            {
+                "status": "ACTIVE",
+                "subscriptionId": f"sub_{self._generate_id()}",
+                "nextBillingDate": (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+            }
+        ]
+    
+    def _skio_pause_subscription(self, params: Dict[str, Any]) -> dict:
+        """Mock skio_pause_subscription - always succeeds."""
+        return {}
+    
+    def _skio_skip_next_order_subscription(self, params: Dict[str, Any]) -> dict:
+        """Mock skio_skip_next_order_subscription - always succeeds."""
+        return {}
+    
+    def _skio_unpause_subscription(self, params: Dict[str, Any]) -> dict:
+        """Mock skio_unpause_subscription - always succeeds."""
+        return {}
 
 
 # Global mock server instance

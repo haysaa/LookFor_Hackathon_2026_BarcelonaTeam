@@ -12,8 +12,7 @@
         "contact_day"
     ],
     "tools_available": [
-        "check_order_status",
-        "get_shipping_info"
+        "shopify_get_order_details"
     ],
     "rules": [
         {
@@ -40,7 +39,7 @@
             "policy_applied": "fetch_order_status",
             "tool_plan": [
                 {
-                    "tool_name": "check_order_status",
+                    "tool_name": "shopify_get_order_details",
                     "params_source": {
                         "order_id": "context.order_id"
                     }

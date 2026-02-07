@@ -1,18 +1,19 @@
 """
 Tools Client
-Version: 1.0
+Version: 2.0 - Official Hackathon Spec
 Developer: Dev B
 
-Unified client for executing tools with retry logic, normalization, and tracing.
-All tool calls go through this client for consistent behavior.
+Unified client for executing tools with retry logic, JSON schema validation, 
+normalization, and tracing. All tool calls go through this client for consistent behavior.
 """
 import os
 import requests
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from dataclasses import dataclass, field
+from jsonschema import validate, ValidationError
 
-from .catalog import get_tool, get_tool_schema
+from .catalog import get_tool, get_tool_schema, get_tool_endpoint, get_tool_method
 from .mock_server import get_mock_server
 
 
@@ -33,6 +34,7 @@ class ToolsClient:
     """
     Unified tools client with:
     - Single entry point for all tool calls
+    - JSON schema validation BEFORE calling tools (CRITICAL requirement)
     - Automatic retry on transient failures
     - Response normalization
     - Trace event generation
@@ -64,7 +66,8 @@ class ToolsClient:
             timeout: Request timeout in seconds
             mock_fail_rate: For testing - probability of mock failures
         """
-        self.base_url = base_url or os.getenv("TOOLS_API_URL", "http://localhost:8001")
+        # CRITICAL: API_URL will be provided on-site
+        self.base_url = base_url or os.getenv("API_URL", "http://localhost:8001")
         self.use_mock = use_mock
         self.max_retries = max_retries
         self.timeout = timeout
@@ -75,9 +78,34 @@ class ToolsClient:
         # Track all calls for tracing
         self.call_history: List[ToolCallResult] = []
     
+    def _validate_params(self, tool_name: str, params: Dict[str, Any]) -> Optional[str]:
+        """
+        Validate params against paramsJsonSchema.
+        
+        CRITICAL: This is a hackathon requirement - validate BEFORE calling tools.
+        
+        Args:
+            tool_name: Name of the tool
+            params: Parameters to validate
+        
+        Returns:
+            None if valid, error message string if invalid
+        """
+        schema = get_tool_schema(tool_name)
+        if not schema:
+            return f"No schema found for tool: {tool_name}"
+        
+        try:
+            validate(instance=params, schema=schema)
+            return None  # Valid
+        except ValidationError as e:
+            return f"Invalid params: {e.message}"
+        except Exception as e:
+            return f"Validation error: {str(e)}"
+    
     def execute(self, tool_name: str, params: Dict[str, Any]) -> ToolCallResult:
         """
-        Execute a tool with retry logic.
+        Execute a tool with JSON validation and retry logic.
         
         Args:
             tool_name: Name of the tool from catalog
@@ -95,6 +123,20 @@ class ToolsClient:
                 data={},
                 error=f"Tool not found in catalog: {tool_name}",
                 should_escalate=True
+            )
+            self.call_history.append(result)
+            return result
+        
+        # CRITICAL: Validate params BEFORE calling (hackathon requirement)
+        validation_error = self._validate_params(tool_name, params)
+        if validation_error:
+            result = ToolCallResult(
+                tool_name=tool_name,
+                params=params,
+                success=False,
+                data={},
+                error=validation_error,
+                should_escalate=False  # Don't escalate on param errors
             )
             self.call_history.append(result)
             return result
@@ -143,30 +185,33 @@ class ToolsClient:
         return result
     
     def _execute_real(self, tool_def: dict, params: Dict[str, Any]) -> dict:
-        """Execute a real HTTP call to tool endpoint."""
-        endpoint = tool_def.get("endpoint", "")
-        method = tool_def.get("method", "GET").upper()
+        """
+        Execute a real HTTP call to tool endpoint.
         
-        # Build URL with path params
+        All official tools use POST with JSON body.
+        Endpoints are: {API_URL}/hackathon/{endpoint_name}
+        """
+        endpoint = tool_def.get("endpoint", "")
+        method = tool_def.get("method", "POST").upper()
+        
+        # Build full URL
         url = self.base_url + endpoint
-        for key, value in params.items():
-            url = url.replace(f"{{{key}}}", str(value))
         
         try:
-            if method == "GET":
-                resp = requests.get(url, params=params, timeout=self.timeout)
-            elif method == "POST":
+            # All tools use POST with JSON body (official spec)
+            if method == "POST":
                 resp = requests.post(url, json=params, timeout=self.timeout)
             else:
+                # Fallback (shouldn't happen with official tools)
                 return {"success": False, "data": {}, "error": f"Unsupported method: {method}"}
             
-            # Normalize response
+            # Official contract: Always HTTP 200
             if resp.status_code == 200:
                 data = resp.json()
-                # Handle if API already returns our format
+                # API returns {success, data?, error?}
                 if "success" in data:
                     return data
-                # Wrap raw response
+                # Fallback: wrap raw response
                 return {"success": True, "data": data, "error": ""}
             else:
                 return {
