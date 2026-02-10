@@ -156,7 +156,8 @@ This ensures:
 
 Customer requests refund → Order validation → Shipment logic → Structured response.
 
-![Refund Flow](docs/refund_flow.png)
+
+![usecase](https://github.com/user-attachments/assets/ceb8c4cb-2f03-4f74-98f8-24e267b2c5b9)
 
 ---
 
@@ -164,7 +165,7 @@ Customer requests refund → Order validation → Shipment logic → Structured 
 
 Intent detection → Order lookup → Structured order summary.
 
-![Order Details](docs/order_details.png)
+![WhatsApp Image 2026-02-10 at 21 54 25](https://github.com/user-attachments/assets/45508ee9-db92-4da6-9692-97f6b4ee6bd9)
 
 ---
 
