@@ -1,90 +1,178 @@
-# LookFor_Hackathon_2026_BarcelonaTeam
+# 🚀 LookFor Hackathon 2026 – BarcelonaTeam
 
-Multi-agent customer support system for WISMO, Refund, and Wrong/Missing Item use cases.
+Multi-Agent Customer Support System for automated resolution of WISMO (Where Is My Order), Refund, and Wrong / Missing Item use cases.
 
-## Quick Start
+Built with LLM-based intent detection, structured workflow orchestration, deterministic business rules, escalation control, full session trace logging, and Docker-based reproducibility.
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
+---
 
-# Run server
-python main.py
-```
+## 🧠 Problem
 
-Server runs at `http://localhost:8000`
+E-commerce platforms receive thousands of repetitive support tickets daily:
 
-## Loading Real Tickets
+- “Where is my order?”
+- “I want a refund.”
+- “I received the wrong item.”
 
-By default, the app loads dummy tickets from `fixtures/tickets_dummy.json`.
+Manual handling leads to high operational costs, inconsistent decisions, delayed responses, and lack of traceability.
 
-To load real anonymized tickets:
+Most AI chatbot systems either:
+- Answer vaguely,
+- Or make uncontrolled decisions,
+- Or lack auditability.
 
-```bash
-# Option 1: Set environment variable
-set TICKETS_PATH=fixtures/tickets_real.json
-python main.py
+We wanted to build something closer to enterprise-grade customer operations automation.
 
-# Option 2: Use runtime path
-set TICKETS_PATH=/mnt/data/anonymized_tickets.json
-python main.py
-```
+---
 
-The loader auto-detects format (real vs dummy) and logs the source at startup.
+## 💡 Solution
 
-## API Endpoints
+We built a multi-agent orchestration system that:
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/session/start` | POST | Start new session |
-| `/session/{id}/message` | POST | Send message |
-| `/session/{id}/trace` | GET | Get session trace |
-| `/health` | GET | Health check |
+- Detects customer intent using an LLM
+- Routes requests to the correct domain agent
+- Applies structured, deterministic business rules
+- Enforces delivery promises
+- Automatically escalates when SLAs are violated
+- Stores full session trace for auditability and debugging
 
-## Tests
+This is not a generic chatbot.  
+It is a controllable AI-assisted customer support engine.
 
-```bash
-# All tests
-pytest tests/ -v
+---
 
-# API contract tests
-pytest tests/test_api_contract.py -v
+## 🏗 Architecture Overview
 
-# Ticket store tests
-pytest tests/test_ticket_store_real_tickets.py -v
+The system consists of:
 
-# WISMO workflow tests
-pytest tests/test_wismo_workflow.py -v
-```
+- 🎯 Intent Agent (LLM-based classification)
+- 📦 WISMO Agent
+- 💸 Refund Agent
+- 📦❌ Wrong / Missing Item Agent
+- 🧠 Orchestrator (routing and control layer)
+- 📚 Ticket Store (dummy or real anonymized tickets)
+- 📊 Session Trace Manager
 
-## WISMO Promise Logic
+Each request follows this lifecycle:
 
-The WISMO (Where Is My Order) workflow includes day-based delivery promise rules:
+1. Session is started
+2. User message is received
+3. Intent is detected
+4. Orchestrator routes to relevant agent
+5. Agent executes structured workflow
+6. Business rules applied
+7. Trace updated
+8. Response returned
+
+All state transitions are logged.
+
+---
+
+## 🔄 Complete Workflow Coverage
+
+### 📦 WISMO – Where Is My Order
+
+WISMO includes delivery promise logic based on day-of-week rules.
+
+### Promise Rules
 
 | Customer Contacts | Promise | Deadline |
 |-------------------|---------|----------|
 | Mon–Wed | "by Friday" | Friday of current week |
 | Thu–Sun | "early next week" | Next Monday |
 
-**Session Context Fields Stored:**
-- `wismo_promise_type`: `FRIDAY` or `EARLY_NEXT_WEEK`
-- `wismo_promise_deadline`: ISO date (YYYY-MM-DD)
-- `wismo_promise_set_at`: ISO timestamp
+### Session Context Fields
 
-**Post-Promise Flow:**
-- If customer contacts again after deadline and order not delivered → **escalate**
-- Escalation reason: "WISMO promised date passed; requires human to process resend"
-- Session locked (no more automatic replies)
+- `wismo_promise_type`
+- `wismo_promise_deadline`
+- `wismo_promise_set_at`
 
-## Docker Support
+### Escalation Logic
 
-Run the application using Docker Compose:
+If customer contacts again **after the promised deadline** and order is still not delivered:
 
-1.  Build and run:
-    ```bash
-    docker compose up --build
-    ```
-2.  Access API: `http://localhost:8000/docs`
-3.  Access Health Check: `http://localhost:8000/health`
+- Escalation is triggered
+- Escalation reason is logged
+- Session is locked
+- No further automated replies are allowed
 
-**Note:** By default, `USE_MOCK_TOOLS=true` is set in `docker-compose.yml` to use mock data instead of real API calls, ensuring stability for demos.
+This simulates real SLA enforcement.
+
+---
+
+### 💸 Refund Flow
+
+Refund logic includes:
+
+- Order validation
+- Shipment status check
+- Conditional refund approval
+- If order is shipped → guide customer to return process
+- If wrong or missing item → redirect to resolution workflow
+- Controlled, rule-based responses
+
+No blind LLM decisions are allowed in financial logic.
+
+---
+
+### 📦❌ Wrong / Missing Item Flow
+
+This workflow:
+
+- Collects reason from customer
+- Validates order
+- Suggests structured resolution
+- Escalates when necessary
+- Logs all state transitions
+
+---
+
+## 📊 Observability & Auditability
+
+Each session stores:
+
+- Intent classification
+- Agent decisions
+- Promise metadata
+- Escalation reasons
+- Workflow timestamps
+- Full conversation history
+
+Trace endpoint:
+
+
+This ensures:
+
+- Debuggability
+- Audit readiness
+- Enterprise traceability
+- Controlled AI usage
+
+---
+
+## 🖥 Demo Screenshots
+
+### Refund Flow Example
+
+Customer requests refund → Order validation → Shipment logic → Structured response.
+
+![Refund Flow](docs/refund_flow.png)
+
+---
+
+### Order Details Retrieval Example
+
+Intent detection → Order lookup → Structured order summary.
+
+![Order Details](docs/order_details.png)
+
+---
+
+## 🐳 Docker Support
+
+Designed for reproducible evaluation.
+
+Run with Docker:
+
+```bash
+docker compose up --build
