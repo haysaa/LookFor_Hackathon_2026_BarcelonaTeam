@@ -156,16 +156,16 @@ This ensures:
 
 Customer requests refund → Order validation → Shipment logic → Structured response.
 
+![refund](https://github.com/user-attachments/assets/32dfd354-a982-4ebd-98de-dd988ad683ad)
 
-![usecase](https://github.com/user-attachments/assets/ceb8c4cb-2f03-4f74-98f8-24e267b2c5b9)
 
 ---
 
 ### Order Details Retrieval Example
 
 Intent detection → Order lookup → Structured order summary.
+![details](https://github.com/user-attachments/assets/d32e087d-cd43-4857-9305-d6c1c67346d8)
 
-![WhatsApp Image 2026-02-10 at 21 54 25](https://github.com/user-attachments/assets/45508ee9-db92-4da6-9692-97f6b4ee6bd9)
 
 ---
 
